@@ -1,0 +1,69 @@
+/* ROW */
+.msg-row {
+  display: flex;
+  align-items: flex-end;
+  margin-bottom: 14px;
+  gap: 10px;
+}
+
+/* ALIGNEMENTS */
+.msg-row.user {
+  justify-content: flex-end;
+}
+
+/* AVATAR */
+.avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  flex-shrink: 0;
+}
+
+/* BOT */
+.avatar.bot {
+  background: #e6eefc;
+}
+
+/* USER */
+.avatar.user {
+  background: #dbeafe;
+}
+
+/* CONTENT */
+.msg-content {
+  display: flex;
+  flex-direction: column;
+  max-width: 65%;
+}
+
+/* BUBBLE */
+.bubble {
+  padding: 10px 14px;
+  border-radius: 14px;
+  font-size: 0.9rem;
+  line-height: 1.5;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+}
+
+/* BOT MESSAGE */
+.msg-row.bot .bubble {
+  background: #f1f5f9;
+  color: #1f2937;
+  border-bottom-left-radius: 6px;
+}
+
+/* USER MESSAGE */
+.msg-row.user .bubble {
+  background: #1677ff;
+  color: white;
+  border-bottom-right-radius: 6px;
+}
+
+/* HOVER (petit détail pro) */
+.bubble:hover {
+  opacity: 0.95;
+}

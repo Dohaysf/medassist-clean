@@ -1,0 +1,393 @@
+/* ============================================
+   ContactPage.css — STYLE IDENTIQUE AU CHAT PATIENT
+   ============================================ */
+
+:root {
+    --bg: #f9f7f3;
+    --bg-card: #ffffff;
+    --text-primary: #1a1915;
+    --text-secondary: #6b6963;
+    --text-muted: #9c998f;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-input: #e3e1db;
+    --accent: #c96a3a;
+    --danger: #d9534f;
+}
+
+/* Layout principal */
+.contact-page {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    min-height: 0;
+    background: var(--bg);
+    overflow: hidden;
+}
+
+/* Topbar style chat */
+.contact-topbar {
+    padding: 13px 24px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    flex-shrink: 0;
+}
+
+.contact-topbar-title {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.contact-topbar-badge {
+    font-size: 0.72rem;
+    font-weight: 500;
+    background: #f0ede6;
+    color: var(--text-secondary);
+    padding: 3px 12px;
+    border-radius: 20px;
+    border: 1px solid var(--border-input);
+}
+
+/* Zone de recherche */
+.contact-search-area {
+    padding: 16px 24px 8px;
+    background: var(--bg);
+    flex-shrink: 0;
+}
+
+.search-bar {
+    background: var(--bg-card);
+    border: 1px solid var(--border-input);
+    border-radius: 16px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px 16px;
+    max-width: 380px;
+    transition: all 0.15s;
+}
+
+.search-bar:focus-within {
+    border-color: var(--accent);
+    box-shadow: 0 1px 6px rgba(0, 0, 0, 0.08);
+}
+
+.search-icon {
+    color: var(--text-muted);
+    font-size: 0.9rem;
+}
+
+.search-bar input {
+    flex: 1;
+    border: none;
+    background: transparent;
+    outline: none;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+}
+
+.search-bar input::placeholder {
+    color: var(--text-muted);
+}
+
+/* Layout 2 colonnes */
+.contact-layout {
+    flex: 1;
+    display: flex;
+    gap: 24px;
+    padding: 16px 24px 24px;
+    overflow: hidden;
+}
+
+/* Liste des messages (colonne de gauche) */
+.messages-list {
+    flex: 1.2;
+    min-width: 360px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.list-header {
+    padding: 14px 20px;
+    background: var(--bg);
+    border-bottom: 1px solid var(--border);
+    font-weight: 500;
+    color: var(--text-primary);
+    font-size: 0.85rem;
+}
+
+.messages-list-scroll {
+    flex: 1;
+    overflow-y: auto;
+}
+
+.message-card {
+    padding: 16px 20px;
+    border-bottom: 1px solid var(--border);
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.message-card:hover {
+    background: rgba(0, 0, 0, 0.02);
+}
+
+.message-card.active {
+    background: rgba(201, 106, 58, 0.05);
+    border-left: 3px solid var(--accent);
+}
+
+.message-card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+    flex-wrap: wrap;
+    gap: 8px;
+}
+
+.message-name {
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+}
+
+.message-date {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.card-icon {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+}
+
+.message-email {
+    font-size: 0.75rem;
+    color: var(--accent);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    word-break: break-all;
+}
+
+.message-preview {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    line-height: 1.4;
+    margin-bottom: 12px;
+}
+
+.delete-btn {
+    background: transparent;
+    border: none;
+    color: var(--danger);
+    font-size: 0.7rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 10px;
+    border-radius: 20px;
+    transition: all 0.15s;
+}
+
+.delete-btn:hover {
+    background: rgba(217, 83, 79, 0.1);
+}
+
+/* Détail du message (colonne de droite) */
+.message-detail {
+    flex: 1;
+    min-width: 360px;
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 24px;
+    overflow-y: auto;
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
+}
+
+.detail-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 24px;
+    padding-bottom: 16px;
+    border-bottom: 1px solid var(--border);
+}
+
+.detail-header h2 {
+    margin: 0;
+    font-size: 1.1rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+.reply-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 6px 16px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    transition: all 0.15s;
+}
+
+.reply-btn:hover {
+    background: #b55c30;
+    transform: translateY(-1px);
+}
+
+.detail-field {
+    margin-bottom: 20px;
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.detail-field strong {
+    font-size: 0.7rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+    color: var(--text-muted);
+}
+
+.detail-field span {
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    word-break: break-all;
+}
+
+.detail-message {
+    background: var(--bg);
+    padding: 14px;
+    border-radius: 12px;
+    margin-top: 4px;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    font-size: 0.9rem;
+    color: var(--text-primary);
+    border: 1px solid var(--border);
+}
+
+/* États vides */
+.no-messages, .no-selection {
+    text-align: center;
+    padding: 60px 24px;
+    color: var(--text-muted);
+}
+
+.no-selection span, .no-messages {
+    font-size: 3rem;
+    opacity: 0.5;
+    display: block;
+    margin-bottom: 16px;
+}
+
+.no-selection h3 {
+    font-size: 1rem;
+    font-weight: 500;
+    color: var(--text-secondary);
+    margin-bottom: 8px;
+}
+
+.no-selection p {
+    font-size: 0.8rem;
+}
+
+/* Loading */
+.contact-loading {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    height: 60vh;
+    background: var(--bg);
+}
+
+.loading-spinner {
+    font-size: 1rem;
+    color: var(--text-muted);
+}
+
+/* Scrollbar */
+.messages-list-scroll::-webkit-scrollbar,
+.message-detail::-webkit-scrollbar {
+    width: 4px;
+}
+
+.messages-list-scroll::-webkit-scrollbar-track,
+.message-detail::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.messages-list-scroll::-webkit-scrollbar-thumb,
+.message-detail::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+}
+
+/* Responsive */
+@media (max-width: 900px) {
+    .contact-layout {
+        flex-direction: column;
+        padding: 16px;
+    }
+    
+    .messages-list {
+        min-width: auto;
+        max-height: 400px;
+    }
+    
+    .message-detail {
+        min-width: auto;
+    }
+    
+    .detail-header {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 12px;
+    }
+}
+
+@media (max-width: 768px) {
+    .contact-topbar {
+        padding: 13px 16px;
+    }
+    
+    .contact-search-area {
+        padding: 12px 16px;
+    }
+    
+    .contact-layout {
+        padding: 12px 16px 16px;
+    }
+    
+    .message-card {
+        padding: 12px 16px;
+    }
+    
+    .message-detail {
+        padding: 16px;
+    }
+}

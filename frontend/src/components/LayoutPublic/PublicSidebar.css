@@ -1,0 +1,388 @@
+/* ============================================
+   PublicSidebar.css — style Claude.ai exact
+   ============================================ */
+
+.public-sidebar {
+    width: 260px;
+    background: #eeebe3;
+    color: #1a1915;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 10;
+    border-right: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+
+/* ===== LOGO / HEADER ===== */
+
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 14px 10px;
+}
+
+.sidebar-logo-title {
+    font-size: 1.15rem;
+    font-weight: 600;
+    color: #1a1915;
+    letter-spacing: -0.02em;
+}
+
+.sidebar-collapse-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(26, 25, 21, 0.45);
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+
+.sidebar-collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.07);
+    color: #1a1915;
+}
+
+
+/* ===== NAV ITEMS (liste principale) ===== */
+
+.sidebar-nav {
+    padding: 4px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 1px;
+}
+
+.sidebar-nav a,
+.sidebar-nav-btn {
+    display: flex;
+    align-items: center;
+    gap: 11px;
+    padding: 9px 14px;
+    margin: 0 6px;
+    border-radius: 8px;
+    color: rgba(26, 25, 21, 0.8);
+    text-decoration: none;
+    transition: background 0.15s, color 0.15s;
+    font-size: 0.92rem;
+    font-weight: 400;
+    border: none;
+    background: transparent;
+    cursor: pointer;
+    font-family: inherit;
+    width: calc(100% - 12px);
+    text-align: left;
+}
+
+.sidebar-nav a:hover,
+.sidebar-nav-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #1a1915;
+}
+
+.sidebar-nav a.active {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1915;
+    font-weight: 500;
+}
+
+
+/* Icône ronde "+" pour Nouvelle consultation */
+
+.nav-plus-icon {
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1.5px solid rgba(26, 25, 21, 0.35);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+    font-size: 0.9rem;
+    color: rgba(26, 25, 21, 0.6);
+    line-height: 1;
+}
+
+
+/* Icônes outline normales */
+
+.nav-icon {
+    width: 18px;
+    height: 18px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-nav a:hover .nav-icon,
+.sidebar-nav a.active .nav-icon,
+.sidebar-nav-btn:hover .nav-icon {
+    opacity: 1;
+}
+
+
+/* Badge "Mettre à niveau" */
+
+.nav-upgrade-badge {
+    margin-left: auto;
+    font-size: 0.72rem;
+    font-weight: 500;
+    color: rgba(26, 25, 21, 0.55);
+    background: rgba(26, 25, 21, 0.08);
+    border: 1px solid rgba(26, 25, 21, 0.12);
+    padding: 2px 9px;
+    border-radius: 20px;
+    white-space: nowrap;
+}
+
+
+/* Texte désactivé (Code) */
+
+.nav-disabled {
+    opacity: 0.35;
+    pointer-events: none;
+}
+
+
+/* ===== DIVIDER ===== */
+
+.sidebar-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.08);
+    margin: 8px 14px;
+}
+
+
+/* ===== SECTION RÉCENTS ===== */
+
+.sidebar-recents {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    padding: 4px 0 0;
+    min-height: 0;
+}
+
+.sidebar-section-label {
+    padding: 8px 20px 4px;
+    font-size: 0.78rem;
+    font-weight: 400;
+    color: rgba(26, 25, 21, 0.45);
+    letter-spacing: 0;
+}
+
+.recent-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 2px 0;
+}
+
+.recent-list::-webkit-scrollbar {
+    width: 0;
+}
+
+.recent-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 14px;
+    margin: 0 6px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+    gap: 8px;
+}
+
+.recent-item:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.recent-item:hover .recent-menu-btn {
+    opacity: 1;
+}
+
+.recent-item-text {
+    font-size: 0.9rem;
+    color: rgba(26, 25, 21, 0.75);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    flex: 1;
+    font-weight: 400;
+}
+
+.recent-item.active-recent .recent-item-text {
+    color: #1a1915;
+    font-weight: 500;
+}
+
+.recent-item.active-recent {
+    background: rgba(0, 0, 0, 0.07);
+}
+
+.recent-menu-btn {
+    opacity: 0;
+    background: none;
+    border: none;
+    cursor: pointer;
+    color: rgba(26, 25, 21, 0.5);
+    padding: 2px 4px;
+    border-radius: 5px;
+    transition: opacity 0.15s, background 0.15s;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+}
+
+.recent-menu-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1915;
+}
+
+
+/* ===== PROFIL (bas) ===== */
+
+.sidebar-footer {
+    padding: 10px 10px 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.sidebar-profile {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 8px 10px;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: background 0.15s;
+}
+
+.sidebar-profile:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.profile-avatar {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: #1a1915;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 0.82rem;
+    font-weight: 600;
+    color: #eeebe3;
+    flex-shrink: 0;
+}
+
+.profile-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.profile-name {
+    font-size: 0.88rem;
+    font-weight: 500;
+    color: #1a1915;
+    line-height: 1.2;
+}
+
+.profile-plan {
+    font-size: 0.75rem;
+    color: rgba(26, 25, 21, 0.45);
+    line-height: 1.2;
+}
+
+.profile-actions {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+}
+
+.profile-action-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: 1px solid rgba(26, 25, 21, 0.15);
+    background: rgba(255, 255, 255, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(26, 25, 21, 0.55);
+    transition: all 0.15s;
+    position: relative;
+}
+
+.profile-action-btn:hover {
+    background: rgba(0, 0, 0, 0.07);
+    color: #1a1915;
+}
+
+.profile-dot {
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    width: 7px;
+    height: 7px;
+    border-radius: 50%;
+    background: #2563eb;
+    border: 1.5px solid #eeebe3;
+}
+
+
+/* Auth buttons (non connecté) */
+
+.auth-section {
+    padding: 10px 10px 16px;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 3px;
+}
+
+.auth-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 12px;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    font-weight: 400;
+    cursor: pointer;
+    transition: background 0.15s;
+    border: none;
+    font-family: inherit;
+    width: 100%;
+    color: rgba(26, 25, 21, 0.75);
+    background: transparent;
+    text-align: left;
+}
+
+.auth-btn:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #1a1915;
+}
+
+.auth-btn svg {
+    opacity: 0.55;
+    flex-shrink: 0;
+}
+
+.register-btn {
+    font-weight: 500;
+    color: #1a1915;
+}

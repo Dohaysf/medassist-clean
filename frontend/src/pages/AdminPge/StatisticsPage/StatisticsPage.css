@@ -1,0 +1,209 @@
+.stats-page {
+  padding: 32px;
+  background: linear-gradient(135deg, #F5F7FA, #E9E6FF);
+  min-height: calc(100vh - 140px);
+  position: relative;
+  overflow: hidden;
+}
+
+.stats-page::before {
+  content: "";
+  position: absolute;
+  width: 500px;
+  height: 500px;
+  background: radial-gradient(circle, rgba(123,97,255,0.15), transparent 70%);
+  top: -100px;
+  right: -100px;
+  z-index: 0;
+}
+
+.stats-header {
+  margin-bottom: 32px;
+  position: relative;
+  z-index: 1;
+}
+
+.stats-header h1 {
+  font-size: 2rem;
+  font-weight: 700;
+  background: linear-gradient(135deg, #2EC5C0, #7B61FF);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  margin-bottom: 8px;
+}
+
+.stats-header p {
+  color: #6A85F1;
+  font-size: 1rem;
+}
+
+.kpi-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: 24px;
+  margin-bottom: 40px;
+  position: relative;
+  z-index: 1;
+}
+
+.kpi-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border-radius: 28px;
+  padding: 20px;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  transition: all 0.2s;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.kpi-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.08);
+  background: rgba(255, 255, 255, 0.8);
+}
+
+.kpi-icon {
+  font-size: 2.8rem;
+  color: #7B61FF;
+  background: rgba(123, 97, 255, 0.1);
+  padding: 12px;
+  border-radius: 20px;
+}
+
+.kpi-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.kpi-value {
+  font-size: 2rem;
+  font-weight: 700;
+  color: #1F2937;
+  line-height: 1.2;
+}
+
+.kpi-label {
+  font-size: 0.85rem;
+  color: #6A85F1;
+  letter-spacing: 0.3px;
+}
+
+/* ===== GRAPHIQUES : deux colonnes égales ===== */
+.stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;  /* deux colonnes égales */
+  gap: 28px;
+  margin-bottom: 28px;
+  position: relative;
+  z-index: 1;
+}
+
+.stats-card {
+  background: rgba(255, 255, 255, 0.65);
+  backdrop-filter: blur(8px);
+  border-radius: 32px;
+  padding: 20px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  transition: all 0.2s;
+  display: flex;
+  flex-direction: column;
+}
+
+.stats-card:hover {
+  background: rgba(255, 255, 255, 0.8);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.06);
+}
+
+/* Plus besoin de wide, on garde toutes les cartes dans les colonnes */
+.stats-card h3 {
+  font-size: 1.2rem;
+  font-weight: 600;
+  margin-bottom: 20px;
+  color: #1F2937;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+/* Conteneur pour limiter la hauteur des graphiques */
+.stats-card .chart-container {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 280px;
+  max-height: 320px;
+}
+
+/* Ajustement des canvas pour qu'ils ne soient pas trop grands */
+canvas {
+  max-height: 280px !important;
+  width: auto !important;
+  max-width: 100%;
+}
+
+/* Responsive : sur petits écrans, une seule colonne */
+@media (max-width: 900px) {
+  .stats-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+@media (max-width: 600px) {
+  .stats-page {
+    padding: 20px;
+  }
+  .kpi-card {
+    flex-direction: column;
+    text-align: center;
+  }
+}
+
+/* Dark mode */
+body.dark-theme .stats-page {
+  background: linear-gradient(135deg, #0f172a, #1e293b);
+}
+
+body.dark-theme .stats-page::before {
+  background: radial-gradient(circle, rgba(123,97,255,0.2), transparent 70%);
+}
+
+body.dark-theme .stats-header h1 {
+  background: linear-gradient(135deg, #2EC5C0, #7B61FF);
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+body.dark-theme .stats-header p {
+  color: #A1C4FD;
+}
+
+body.dark-theme .kpi-card,
+body.dark-theme .stats-card {
+  background: rgba(30, 41, 59, 0.6);
+  border-color: rgba(255, 255, 255, 0.05);
+}
+
+body.dark-theme .kpi-card:hover,
+body.dark-theme .stats-card:hover {
+  background: rgba(30, 41, 59, 0.8);
+}
+
+body.dark-theme .kpi-value {
+  color: #E2E8F0;
+}
+
+body.dark-theme .kpi-label,
+body.dark-theme .stats-card h3 {
+  color: #A1C4FD;
+}
+
+body.dark-theme .kpi-icon {
+  color: #A1C4FD;
+  background: rgba(161, 196, 253, 0.1);
+}

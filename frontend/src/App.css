@@ -1,0 +1,37 @@
+/* light theme (par défaut) */
+body.light-theme {
+  background-color: #f5f7fa;
+  color: #1a2a3a;
+}
+
+body.dark-theme {
+  background-color: #121826;
+  color: #e0e0e0;
+}
+
+body.dark-theme .settings-card,
+body.dark-theme .chat-container,
+body.dark-theme .session-card,
+body.dark-theme .stats-card {
+  background: #1e2a3a;
+  color: #e0e0e0;
+  border-color: #2a3a4a;
+}
+
+body.dark-theme .setting-item {
+  border-bottom-color: #2a3a4a;
+}
+
+body.dark-theme .toggle-group button {
+  background: #2a3a4a;
+  color: white;
+  border-color: #3a4a5a;
+}
+
+body.dark-theme .toggle-group button.active {
+  background: #0066cc;
+}
+
+body.dark-theme .slider {
+  background: #3a4a5a;
+}

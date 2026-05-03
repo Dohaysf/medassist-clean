@@ -1,0 +1,45 @@
+/* Header.css – style uniforme */
+.app-header {
+    background: var(--bg-card);
+    padding: 16px 28px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 28px;
+    box-shadow: var(--shadow-sm);
+    margin-bottom: 24px;
+    border: 1px solid var(--border);
+}
+
+.header-title h1 {
+    margin: 0;
+    font-size: 1.3rem;
+    font-weight: 600;
+    background: linear-gradient(135deg, var(--primary, #2EC5C0), var(--accent, #7B61FF));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+    letter-spacing: -0.02em;
+}
+
+.header-user span {
+    font-size: 1.8rem;
+    cursor: pointer;
+    transition: transform 0.2s;
+    color: var(--primary, #2EC5C0);
+}
+
+.header-user span:hover {
+    transform: scale(1.05);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .app-header {
+        padding: 12px 20px;
+    }
+    
+    .header-title h1 {
+        font-size: 1rem;
+    }
+}

@@ -1,0 +1,103 @@
+/* ESOSummary.css - Style pour le résumé médical */
+
+.eso-card {
+  background: white;
+  border-radius: 24px;
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.04);
+  overflow: hidden;
+  border: 1px solid #EDF2F7;
+}
+
+.eso-header {
+  background: linear-gradient(135deg, #0A5C9E 0%, #1E7FB4 100%);
+  padding: 18px 24px;
+  color: white;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.eso-header h3 {
+  margin: 0;
+  font-size: 1.2rem;
+  font-weight: 600;
+}
+
+.status-badge {
+  padding: 4px 12px;
+  border-radius: 40px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  background: rgba(255, 255, 255, 0.2);
+  backdrop-filter: blur(2px);
+}
+
+.status-badge.waiting {
+  background: #F59E0B;
+}
+
+.status-badge.in-progress {
+  background: #10B981;
+}
+
+.eso-body {
+  padding: 24px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #8A9FB5;
+  font-style: italic;
+  padding: 20px 0;
+}
+
+.severity-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 16px;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 0.8rem;
+  margin-bottom: 20px;
+  color: white;
+}
+
+.eso-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.eso-item {
+  display: flex;
+  padding: 12px 0;
+  border-bottom: 1px solid #EFF3F8;
+}
+
+.eso-item:last-child {
+  border-bottom: none;
+}
+
+.eso-key {
+  flex: 0 0 130px;
+  font-weight: 600;
+  color: #2C4B6E;
+  font-size: 0.85rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.eso-icon {
+  color: #2EC5C0;
+  font-size: 0.9rem;
+}
+
+.eso-value {
+  flex: 1;
+  color: #1A344C;
+  font-weight: 500;
+  word-break: break-word;
+}

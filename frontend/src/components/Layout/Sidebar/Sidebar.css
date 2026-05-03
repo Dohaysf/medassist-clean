@@ -1,0 +1,162 @@
+/* ============================================
+   Sidebar.css — STYLE ADMIN (même que public)
+   ============================================ */
+
+.admin-sidebar {
+    width: 260px;
+    background: #eeebe3;
+    color: #1a1915;
+    display: flex;
+    flex-direction: column;
+    height: 100vh;
+    position: fixed;
+    left: 0;
+    top: 0;
+    z-index: 10;
+    border-right: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+/* ===== HEADER ===== */
+.sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 20px 16px;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+.sidebar-logo-title {
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: #1a1915;
+    letter-spacing: -0.02em;
+}
+
+.sidebar-badge {
+    font-size: 0.65rem;
+    font-weight: 500;
+    background: rgba(0, 0, 0, 0.08);
+    color: rgba(26, 25, 21, 0.55);
+    padding: 3px 10px;
+    border-radius: 20px;
+}
+
+/* ===== NAVIGATION ===== */
+.sidebar-nav {
+    padding: 16px 0 0;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+}
+
+.sidebar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 10px 20px;
+    margin: 0 12px;
+    border-radius: 10px;
+    color: rgba(26, 25, 21, 0.75);
+    text-decoration: none;
+    transition: all 0.15s;
+    font-size: 0.9rem;
+    font-weight: 400;
+}
+
+.sidebar-nav a:hover {
+    background: rgba(0, 0, 0, 0.06);
+    color: #1a1915;
+}
+
+.sidebar-nav a.active {
+    background: rgba(0, 0, 0, 0.08);
+    color: #1a1915;
+    font-weight: 500;
+}
+
+/* Icônes */
+.nav-icon {
+    width: 20px;
+    height: 20px;
+    flex-shrink: 0;
+    opacity: 0.55;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.sidebar-nav a:hover .nav-icon,
+.sidebar-nav a.active .nav-icon {
+    opacity: 1;
+}
+
+/* ===== DIVIDER ===== */
+.sidebar-divider {
+    height: 1px;
+    background: rgba(0, 0, 0, 0.07);
+    margin: 16px 20px;
+}
+
+/* ===== FOOTER ===== */
+.sidebar-footer {
+    padding: 16px 16px 24px;
+    margin-top: auto;
+}
+
+.logout-btn {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    width: 100%;
+    padding: 10px 16px;
+    border-radius: 10px;
+    background: transparent;
+    border: none;
+    cursor: pointer;
+    font-size: 0.9rem;
+    font-weight: 400;
+    color: rgba(239, 68, 68, 0.8);
+    transition: all 0.15s;
+    font-family: inherit;
+}
+
+.logout-btn svg {
+    width: 18px;
+    height: 18px;
+    opacity: 0.7;
+}
+
+.logout-btn:hover {
+    background: rgba(239, 68, 68, 0.1);
+    color: #ef4444;
+}
+
+.logout-btn:hover svg {
+    opacity: 1;
+}
+
+/* ===== SCROLLBAR ===== */
+.admin-sidebar::-webkit-scrollbar {
+    width: 4px;
+}
+
+.admin-sidebar::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.admin-sidebar::-webkit-scrollbar-thumb {
+    background: rgba(0, 0, 0, 0.15);
+    border-radius: 4px;
+}
+
+/* ===== RESPONSIVE ===== */
+@media (max-width: 768px) {
+    .admin-sidebar {
+        transform: translateX(-100%);
+        transition: transform 0.3s ease;
+    }
+    
+    .admin-sidebar.open {
+        transform: translateX(0);
+    }
+}

@@ -1,0 +1,234 @@
+/* SIDEBAR ROOT */
+
+.Patient-sidebar {
+    width: 260px;
+    background: #eeebe3;
+    color: #1a1915;
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+    position: fixed;
+    left: 0;
+    top: 0;
+    overflow: hidden;
+    border-right: 1px solid rgba(0, 0, 0, 0.07);
+}
+
+
+/* HEADER */
+
+.Patient-sidebar-logo {
+    padding: 16px 14px 10px;
+}
+
+.Patient-sidebar-logo h2 {
+    font-size: 1.15rem;
+    margin: 0;
+}
+
+
+/* NEW CHAT */
+
+.new-chat-btn {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin: 8px;
+    padding: 10px;
+    border-radius: 8px;
+    background: rgba(0, 0, 0, 0.05);
+    border: none;
+    cursor: pointer;
+    width: calc(100% - 16px);
+}
+
+.new-chat-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}
+
+.plus-icon {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    border: 1px solid rgba(0, 0, 0, 0.3);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+
+/* SCROLLABLE AREA */
+
+.sidebar-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    min-height: 0;
+    overflow-y: auto;
+}
+
+
+/* NAVIGATION */
+
+.Patient-sidebar-nav {
+    display: flex;
+    flex-direction: column;
+    padding: 4px 0;
+}
+
+.Patient-sidebar-nav a {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 9px 14px;
+    margin: 0 6px;
+    border-radius: 8px;
+    color: rgba(26, 25, 21, 0.8);
+    text-decoration: none;
+}
+
+.Patient-sidebar-nav a:hover {
+    background: rgba(0, 0, 0, 0.06);
+}
+
+.Patient-sidebar-nav a.active {
+    background: rgba(0, 0, 0, 0.06);
+    font-weight: 500;
+}
+
+
+/* ICONS */
+
+.Patient-nav-icon {
+    opacity: 0.5;
+}
+
+.Patient-sidebar-nav a:hover .Patient-nav-icon,
+.Patient-sidebar-nav a.active .Patient-nav-icon {
+    opacity: 1;
+}
+
+
+/* RECENTS */
+
+.sidebar-recents {
+    padding: 0 6px;
+    margin-top: 10px;
+}
+
+.sidebar-section-label {
+    font-size: 0.75rem;
+    padding: 6px 14px;
+    color: rgba(0, 0, 0, 0.5);
+}
+
+.recent-item {
+    padding: 8px 12px;
+    border-radius: 8px;
+    margin: 2px 6px;
+    cursor: pointer;
+}
+
+.recent-item:hover {
+    background: rgba(0, 0, 0, 0.05);
+}
+
+.recent-item-empty {
+    padding: 8px 12px;
+    margin: 2px 6px;
+    color: rgba(0, 0, 0, 0.4);
+    font-style: italic;
+    font-size: 0.85rem;
+}
+
+.recent-item-title {
+    font-size: 0.82rem;
+    color: var(--text-primary, #1a1915);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.recent-item-date {
+    font-size: 0.7rem;
+    color: var(--text-muted, #9c998f);
+    margin-top: 2px;
+}
+
+
+/* ===== FOOTER AVEC PROFIL UTILISATEUR ===== */
+
+.Patient-sidebar-footer {
+    flex-shrink: 0;
+    background: #eeebe3;
+    padding: 12px 10px;
+    border-top: 1px solid rgba(0, 0, 0, 0.07);
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+
+/* Bloc informations utilisateur (avatar + nom) */
+
+.user-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 8px 10px;
+    border-radius: 12px;
+    background: rgba(0, 0, 0, 0.03);
+}
+
+
+/* Cercle avec la première lettre */
+
+.user-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 1.2rem;
+    font-weight: 600;
+    color: white;
+    text-transform: uppercase;
+    flex-shrink: 0;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+
+/* Nom de l'utilisateur */
+
+.user-name {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: #1a1915;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    flex: 1;
+}
+
+
+/* Bouton de déconnexion */
+
+.Patient-logout-btn {
+    width: 100%;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 10px;
+    border-radius: 8px;
+    border: none;
+    background: rgba(0, 0, 0, 0.03);
+    cursor: pointer;
+    color: #1a1915;
+    font-size: 0.95rem;
+    transition: background 0.2s;
+}
+
+.Patient-logout-btn:hover {
+    background: rgba(0, 0, 0, 0.08);
+}

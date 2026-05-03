@@ -1,0 +1,46 @@
+.patient-info h1 {
+  color: #2c3e66;
+  margin-bottom: 24px;
+}
+
+.info-card {
+  background: white;
+  border-radius: 24px;
+  padding: 24px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
+  max-width: 600px;
+}
+
+.info-row {
+  padding: 10px 0;
+  border-bottom: 1px solid #eef2f7;
+  display: flex;
+  gap: 16px;
+}
+
+.info-row strong {
+  width: 160px;
+  color: #2c5a8c;
+}
+
+.medical-history {
+  margin-top: 20px;
+  padding-top: 12px;
+  border-top: 2px solid #e0e7ff;
+}
+
+.medical-history h3 {
+  color: #2c5a8c;
+  font-size: 1.1rem;
+  margin-bottom: 10px;
+}
+
+.medical-history ul {
+  list-style: none;
+  padding-left: 0;
+}
+
+.medical-history li {
+  padding: 4px 0;
+  color: #4a5b7a;
+}

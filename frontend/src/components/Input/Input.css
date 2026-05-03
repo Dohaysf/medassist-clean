@@ -1,0 +1,72 @@
+.input-form {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 16px 20px;
+  background: white;
+  border-top: 1px solid #EDF2F7;
+}
+
+.input-form input {
+  flex: 1;
+  padding: 14px 20px;
+  border: 1px solid #E2E8F0;
+  border-radius: 40px;
+  font-size: 0.95rem;
+  outline: none;
+  transition: all 0.2s;
+  background: #FFFFFF;
+}
+
+.input-form input:focus {
+  border-color: #0A5C9E;
+  box-shadow: 0 0 0 3px rgba(10, 92, 158, 0.1);
+}
+
+.input-form input:disabled {
+  background: #F1F5F9;
+  cursor: not-allowed;
+}
+
+.microphone-button {
+  background: #F1F5F9;
+  border: none;
+  font-size: 1.3rem;
+  padding: 12px 18px;
+  border-radius: 40px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.microphone-button.listening {
+  background: #EF4444;
+  color: white;
+  animation: pulse 1.2s infinite;
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.input-form button[type="submit"] {
+  background: #0A5C9E;
+  color: white;
+  border: none;
+  padding: 12px 28px;
+  border-radius: 40px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.input-form button[type="submit"]:hover:not(:disabled) {
+  background: #084B82;
+}
+
+.input-form button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
