@@ -106,7 +106,7 @@ async function escaladeUrgence(summary, sessionId, reason, confidence = null) {
     };
 }
 
-// ================= EXTRACTION GROQ AMÉLIORÉE (multi-informations) =================
+// ================= EXTRACTION GROQ =================
 async function extractWithGroq(message, currentSummary) {
     const prompt = `
 Tu es un assistant médical. Tu dois extraire TOUTES les informations médicales présentes dans le message en UNE SEULE FOIS.

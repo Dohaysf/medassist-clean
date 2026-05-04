@@ -172,18 +172,40 @@ const getUserHistory = async (req, res) => {
     const userId = req.user.userId || req.user.id;
     const Conversation = require('../models/Conversation');
     
+    // ✅ Récupérer UNIQUEMENT les conversations de la base de données
     const conversations = await Conversation.find({ userId })
-      .sort({ createdAt: -1 })
-      .select('sessionId messages title createdAt');
+      .sort({ updatedAt: -1 });
     
-    const formatted = conversations.map(conv => ({
-      id: conv._id,
-      sessionId: conv.sessionId,
-      date: conv.createdAt ? new Date(conv.createdAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
-      title: conv.title || 'Consultation médicale',
-      messageCount: conv.messages?.length || 0,
-      preview: conv.messages?.[0]?.text?.substring(0, 100) || 'Aucun message'
-    }));
+    console.log(`📊 ${conversations.length} conversations trouvées en base pour user ${userId}`);
+    
+    // Formater pour le frontend
+    const formatted = conversations.map(conv => {
+      // Extraire le premier message utilisateur pour le titre
+      const firstUserMsg = conv.messages?.find(m => m.sender === 'user');
+      const lastBotMsg = conv.messages?.filter(m => m.sender === 'bot').pop();
+      
+      let title = conv.title;
+      if (!title || title === 'Consultation médicale') {
+        title = firstUserMsg?.text?.substring(0, 50) || 'Consultation médicale';
+      }
+      
+      let preview = lastBotMsg?.text?.substring(0, 120) || 'En attente de réponse...';
+      
+      // ✅ Détecter l'urgence
+      const hasUrgency = lastBotMsg?.text?.includes('URGENCE') || 
+                         lastBotMsg?.text?.includes('critique') ||
+                         lastBotMsg?.text?.includes('SAMU');
+      
+      return {
+        id: conv._id,
+        sessionId: conv.sessionId,
+        date: conv.updatedAt ? new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
+        title: title,
+        preview: preview,
+        messageCount: conv.messages?.length || 0,
+        urgency: hasUrgency
+      };
+    });
     
     res.json(formatted);
   } catch (error) {
@@ -191,7 +213,6 @@ const getUserHistory = async (req, res) => {
     res.status(500).json({ error: 'Erreur lors de la récupération' });
   }
 };
-
 module.exports = { 
   handleChat, 
   resetChatSession, 

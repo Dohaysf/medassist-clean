@@ -170,12 +170,12 @@ const PublicSidebar = () => {
           <span>Chat médical</span>
         </NavLink>
 
-        <NavLink to="public/history" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/public/history" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconHistory /></span>
           <span>Historique</span>
         </NavLink>
 
-        <NavLink to="public/saved" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/public/saved" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconBookmark /></span>
           <span>Sauvegardés</span>
         </NavLink>

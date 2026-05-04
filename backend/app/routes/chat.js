@@ -28,6 +28,43 @@ router.post('/emergency-manual', async (req, res) => {
 // ROUTE : Récupérer l'historique de l'utilisateur connecté
 router.get('/history', auth, getUserHistory);
 
+// ✅ ROUTE : Supprimer une conversation spécifique
+router.delete('/history/:id', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const { id } = req.params;
+    const Conversation = require('../models/Conversation');
+    
+    const result = await Conversation.findOneAndDelete({ _id: id, userId });
+    
+    if (!result) {
+      return res.status(404).json({ error: 'Conversation non trouvée' });
+    }
+    
+    console.log(`🗑️ Conversation ${id} supprimée pour user ${userId}`);
+    res.json({ success: true, message: 'Conversation supprimée' });
+  } catch (error) {
+    console.error('Erreur suppression:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
+// ✅ ROUTE : Supprimer TOUTES les conversations de l'utilisateur
+router.delete('/history/all', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId || req.user.id;
+    const Conversation = require('../models/Conversation');
+    
+    const result = await Conversation.deleteMany({ userId });
+    
+    console.log(`🗑️ ${result.deletedCount} conversations supprimées pour user ${userId}`);
+    res.json({ success: true, deletedCount: result.deletedCount });
+  } catch (error) {
+    console.error('Erreur suppression totale:', error);
+    res.status(500).json({ error: 'Erreur lors de la suppression' });
+  }
+});
+
 // ROUTE : Sauvegarder une conversation (avec mise à jour si existe)
 router.post('/save-session', auth, async (req, res) => {
   try {

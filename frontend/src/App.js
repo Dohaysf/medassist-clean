@@ -36,7 +36,7 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/public/settings" element={<PublicSettingsPage />} />
-        <Route path="public/history" element={<PublicHistoryPage />} />
+        <Route path="/public/history" element={<PublicHistoryPage />} />
 
         {/* Routes patient protégées */}
         <Route path="/patient/chat" element={
