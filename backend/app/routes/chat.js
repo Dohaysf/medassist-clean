@@ -25,10 +25,38 @@ router.post('/emergency-manual', async (req, res) => {
   }
 });
 
+// ✅ ROUTE PUBLIQUE : Récupérer l'historique (sans auth pour les non connectés)
+router.get('/public/history', async (req, res) => {
+  try {
+    // Pour les utilisateurs non connectés, retourner un tableau vide
+    // ou récupérer par sessionId si besoin
+    const sessionId = req.headers['x-session-id'];
+    if (sessionId) {
+      const Conversation = require('../models/Conversation');
+      const conv = await Conversation.findOne({ sessionId }).sort({ updatedAt: -1 });
+      if (conv) {
+        return res.json([{
+          id: conv._id,
+          sessionId: conv.sessionId,
+          date: conv.updatedAt ? new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
+          title: conv.title || 'Consultation médicale',
+          preview: conv.messages?.[0]?.text?.substring(0, 100) || 'Aucun message',
+          messageCount: conv.messages?.length || 0,
+          urgency: conv.messages?.some(m => m.text?.includes('URGENCE')) || false
+        }]);
+      }
+    }
+    res.json([]);
+  } catch (error) {
+    console.error('Erreur récupération historique public:', error);
+    res.status(500).json({ error: 'Erreur lors de la récupération' });
+  }
+});
+
 // ROUTE : Récupérer l'historique de l'utilisateur connecté
 router.get('/history', auth, getUserHistory);
 
-// ✅ ROUTE : Supprimer une conversation spécifique
+// ROUTE : Supprimer une conversation spécifique
 router.delete('/history/:id', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -49,7 +77,7 @@ router.delete('/history/:id', auth, async (req, res) => {
   }
 });
 
-// ✅ ROUTE : Supprimer TOUTES les conversations de l'utilisateur
+// ROUTE : Supprimer TOUTES les conversations de l'utilisateur
 router.delete('/history/all', auth, async (req, res) => {
   try {
     const userId = req.user.userId || req.user.id;
@@ -65,7 +93,7 @@ router.delete('/history/all', auth, async (req, res) => {
   }
 });
 
-// ROUTE : Sauvegarder une conversation (avec mise à jour si existe)
+// ROUTE : Sauvegarder une conversation
 router.post('/save-session', auth, async (req, res) => {
   try {
     const { sessionId, messages } = req.body;
@@ -81,14 +109,12 @@ router.post('/save-session', auth, async (req, res) => {
     
     const Conversation = require('../models/Conversation');
     
-    // Transformer les messages
     const formattedMessages = messages.map(msg => ({
       sender: msg.role === 'user' || msg.sender === 'user' ? 'user' : 'bot',
       text: msg.content || msg.text,
       timestamp: new Date()
     }));
     
-    // Mettre à jour ou créer
     const conversation = await Conversation.findOneAndUpdate(
       { userId, sessionId },
       {
@@ -107,7 +133,7 @@ router.post('/save-session', auth, async (req, res) => {
       { upsert: true, new: true }
     );
     
-    console.log(`✅ Conversation sauvegardée/mise à jour - User: ${userId}, Session: ${sessionId}`);
+    console.log(`✅ Conversation sauvegardée - User: ${userId}, Session: ${sessionId}`);
     
     res.json({ 
       success: true, 

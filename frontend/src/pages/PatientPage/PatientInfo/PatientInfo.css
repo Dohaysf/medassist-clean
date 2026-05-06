@@ -1,46 +1,411 @@
-.patient-info h1 {
-  color: #2c3e66;
-  margin-bottom: 24px;
+/* ============================================
+   PatientInfo.css — Style Dashboard Horizontale
+   ============================================ */
+
+:root {
+    --bg: #f9f7f3;
+    --bg-card: #ffffff;
+    --text-primary: #1a1915;
+    --text-secondary: #6b6963;
+    --text-muted: #9c998f;
+    --border: rgba(0, 0, 0, 0.08);
+    --border-input: #e3e1db;
+    --accent: #c96a3a;
+    --accent-secondary: #2EC5C0;
+    --success: #28a745;
 }
 
-.info-card {
-  background: white;
-  border-radius: 24px;
-  padding: 24px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.05);
-  max-width: 600px;
+.patient-info-page {
+    display: flex;
+    flex-direction: column;
+    background: var(--bg);
+    min-height: 100vh;
 }
 
-.info-row {
-  padding: 10px 0;
-  border-bottom: 1px solid #eef2f7;
-  display: flex;
-  gap: 16px;
+/* Topbar */
+.info-topbar {
+    padding: 16px 32px;
+    background: var(--bg-card);
+    border-bottom: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    top: 0;
+    z-index: 10;
 }
 
-.info-row strong {
-  width: 160px;
-  color: #2c5a8c;
+.topbar-left {
+    display: flex;
+    align-items: center;
+    gap: 16px;
 }
 
-.medical-history {
-  margin-top: 20px;
-  padding-top: 12px;
-  border-top: 2px solid #e0e7ff;
+.topbar-icon {
+    font-size: 1.8rem;
 }
 
-.medical-history h3 {
-  color: #2c5a8c;
-  font-size: 1.1rem;
-  margin-bottom: 10px;
+.info-topbar h1 {
+    font-size: 1.3rem;
+    font-weight: 500;
+    color: var(--text-primary);
+    margin: 0;
 }
 
-.medical-history ul {
-  list-style: none;
-  padding-left: 0;
+.topbar-badge {
+    padding: 4px 12px;
+    background: var(--accent-secondary);
+    color: white;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    font-weight: 500;
 }
 
-.medical-history li {
-  padding: 4px 0;
-  color: #4a5b7a;
+/* Boutons */
+.edit-btn, .save-btn, .cancel-btn {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 20px;
+    border-radius: 24px;
+    font-size: 0.85rem;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    border: none;
+}
+
+.edit-btn {
+    background: var(--text-primary);
+    color: white;
+}
+
+.edit-btn:hover {
+    background: #2c2b27;
+    transform: scale(0.98);
+}
+
+.save-btn {
+    background: var(--accent);
+    color: white;
+}
+
+.save-btn:hover {
+    background: #b55c30;
+}
+
+.cancel-btn {
+    background: #f0ede6;
+    color: var(--text-secondary);
+    border: 1px solid var(--border-input);
+}
+
+.edit-actions {
+    display: flex;
+    gap: 12px;
+}
+
+/* Toast message */
+.toast-message {
+    position: fixed;
+    top: 80px;
+    right: 24px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    background: white;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+    z-index: 100;
+    animation: slideIn 0.3s ease;
+}
+
+.toast-message.success {
+    background: var(--success);
+    color: white;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* Stats grid horizontale */
+.stats-grid {
+    display: grid;
+    grid-template-columns: repeat(3, 1fr);
+    gap: 20px;
+    padding: 24px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+.stat-card {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 20px;
+    display: flex;
+    align-items: center;
+    gap: 16px;
+    transition: all 0.2s;
+}
+
+.stat-card:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 8px 20px rgba(0,0,0,0.06);
+}
+
+.stat-icon {
+    font-size: 2rem;
+}
+
+.stat-info {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+}
+
+.stat-value {
+    font-size: 0.75rem;
+    color: var(--text-muted);
+    text-transform: uppercase;
+}
+
+.stat-label {
+    font-size: 0.9rem;
+    font-weight: 500;
+    color: var(--text-primary);
+}
+
+/* Main content - 2 colonnes horizontales */
+.info-main {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 24px;
+    padding: 0 32px 32px;
+    max-width: 1400px;
+    margin: 0 auto;
+    width: 100%;
+}
+
+/* Colonnes */
+.info-column {
+    display: flex;
+    flex-direction: column;
+    gap: 24px;
+}
+
+.info-section {
+    background: var(--bg-card);
+    border: 1px solid var(--border);
+    border-radius: 24px;
+    overflow: hidden;
+}
+
+.section-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.section-icon {
+    font-size: 1.5rem;
+}
+
+.section-header h2 {
+    font-size: 1rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0;
+}
+
+/* Grille d'informations */
+.info-grid {
+    display: grid;
+    grid-template-columns: 1fr;
+    gap: 0;
+    padding: 0;
+}
+
+.info-field {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+}
+
+.info-field:last-child {
+    border-bottom: none;
+}
+
+.info-field label {
+    display: block;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+    letter-spacing: 0.5px;
+}
+
+.info-field p {
+    font-size: 0.95rem;
+    color: var(--text-primary);
+    margin: 0;
+    font-weight: 500;
+}
+
+.info-field input,
+.info-field select {
+    width: 100%;
+    padding: 10px 12px;
+    border: 1px solid var(--border-input);
+    border-radius: 12px;
+    font-size: 0.9rem;
+    font-family: inherit;
+    background: var(--bg-card);
+    color: var(--text-primary);
+}
+
+.info-field input:focus,
+.info-field select:focus {
+    outline: none;
+    border-color: var(--accent);
+}
+
+/* Historique médical - grille horizontale */
+.history-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 12px;
+    padding: 20px 24px;
+}
+
+.history-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: #f8f7f3;
+    border-radius: 16px;
+    border: 1px solid var(--border);
+    transition: all 0.2s;
+}
+
+.history-item.active {
+    background: rgba(46, 197, 192, 0.1);
+    border-color: var(--accent-secondary);
+}
+
+.history-item.empty {
+    grid-column: span 2;
+    justify-content: center;
+    background: #f8f7f3;
+    color: var(--text-muted);
+}
+
+.history-icon {
+    font-size: 1.2rem;
+}
+
+.history-item span:not(.history-icon):not(.check) {
+    flex: 1;
+    font-size: 0.85rem;
+    color: var(--text-primary);
+}
+
+.check {
+    color: var(--accent-secondary);
+    font-weight: bold;
+}
+
+/* Carte conseil */
+.advice-card {
+    display: flex;
+    gap: 16px;
+    padding: 20px 24px;
+    background: rgba(201, 106, 58, 0.05);
+    border-top: 1px solid var(--border);
+}
+
+.advice-icon {
+    font-size: 1.8rem;
+}
+
+.advice-content h4 {
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text-primary);
+    margin: 0 0 4px 0;
+}
+
+.advice-content p {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+/* Loading */
+.loading-container {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 400px;
+}
+
+.loading-dots {
+    display: flex;
+    gap: 8px;
+}
+
+.loading-dots span {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--text-muted);
+    animation: bounce 1.4s infinite;
+}
+
+@keyframes bounce {
+    0%, 80%, 100% { transform: scale(0); }
+    40% { transform: scale(1); }
+}
+
+/* Responsive */
+@media (max-width: 1024px) {
+    .info-main {
+        grid-template-columns: 1fr;
+    }
+    
+    .stats-grid {
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+    }
+}
+
+@media (max-width: 768px) {
+    .info-topbar {
+        padding: 12px 20px;
+    }
+    
+    .stats-grid {
+        padding: 20px;
+    }
+    
+    .info-main {
+        padding: 0 20px 20px;
+    }
+    
+    .history-grid {
+        grid-template-columns: 1fr;
+    }
+    
+    .history-item.empty {
+        grid-column: span 1;
+    }
 }

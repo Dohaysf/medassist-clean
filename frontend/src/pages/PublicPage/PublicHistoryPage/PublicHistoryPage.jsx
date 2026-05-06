@@ -6,139 +6,100 @@ import './PublicHistoryPage.css';
 
 const PublicHistoryPage = () => {
   const navigate = useNavigate();
-  const [history, setHistory] = useState([]);
+  const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [filter, setFilter] = useState('all');
 
-  useEffect(() => {
-    loadHistory();
-  }, []);
-
-  const loadHistory = async () => {
+  const loadCurrentSession = async () => {
     setLoading(true);
-    setError('');
     
     try {
-      const token = localStorage.getItem('token');
-      const headers = token ? { Authorization: `Bearer ${token}` } : {};
+      // Récupérer l'ID de session depuis localStorage
+      let sessionId = localStorage.getItem('currentSessionId');
       
-      const response = await axios.get('http://localhost:5000/api/chat/history', { headers });
+      console.log('🔑 Session ID:', sessionId);
+      
+      // Si pas de session, en créer une
+      if (!sessionId) {
+        sessionId = Date.now().toString();
+        localStorage.setItem('currentSessionId', sessionId);
+      }
+      
+      // Appeler l'API
+      const response = await axios.get('http://localhost:5000/api/public/history', {
+        headers: { 'X-Session-Id': sessionId }
+      });
+      
+      console.log('📊 Réponse:', response.data);
       
       if (response.data && response.data.length > 0) {
-        setHistory(response.data);
+        setConversations(response.data);
       } else {
-        setHistory([]);
+        setConversations([]);
       }
     } catch (err) {
-      console.error('Erreur chargement historique:', err);
-      setError('Impossible de charger l\'historique');
-      setHistory([]);
+      console.error('❌ Erreur:', err);
+      setConversations([]);
     } finally {
       setLoading(false);
     }
   };
 
-  // Supprimer une consultation spécifique
-  const deleteHistoryItem = async (id) => {
-    if (!window.confirm('Supprimer cette consultation ?')) return;
+  useEffect(() => {
+    loadCurrentSession();
+  }, []);
+
+  const continueChat = () => {
+    navigate('/public/chat');
+  };
+
+  const startNewChat = async () => {
+    // Créer une nouvelle session
+    const newSessionId = Date.now().toString();
+    localStorage.setItem('currentSessionId', newSessionId);
     
+    // Option: appeler une API pour reset la session
     try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await axios.delete(`http://localhost:5000/api/chat/history/${id}`, {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-      
-      // Mettre à jour l'affichage local
-      setHistory(prev => prev.filter(item => item.id !== id && item._id !== id));
-      showMessage('Consultation supprimée', 'success');
-      
+      await axios.post('http://localhost:5000/api/chat/reset-session', { 
+        sessionId: newSessionId 
+      });
     } catch (err) {
-      console.error('Erreur suppression:', err);
-      showMessage('Erreur lors de la suppression', 'error');
+      console.log('Reset non nécessaire');
     }
-  };
-
-  // Effacer tout l'historique
-  const clearAllHistory = async () => {
-    if (!window.confirm('⚠️ Êtes-vous sûr de vouloir effacer tout votre historique ? Cette action est irréversible.')) return;
     
-    try {
-      const token = localStorage.getItem('token');
-      if (token) {
-        await axios.delete('http://localhost:5000/api/chat/history/all', {
-          headers: { Authorization: `Bearer ${token}` }
-        });
-      }
-      
-      setHistory([]);
-      showMessage('Historique effacé', 'success');
-      
-    } catch (err) {
-      console.error('Erreur suppression totale:', err);
-      showMessage('Erreur lors de la suppression', 'error');
-    }
-  };
-
-  const showMessage = (msg, type) => {
-    const messageDiv = document.createElement('div');
-    messageDiv.className = `toast-message ${type === 'error' ? 'error' : 'success'}`;
-    messageDiv.textContent = msg;
-    document.body.appendChild(messageDiv);
-    setTimeout(() => messageDiv.remove(), 3000);
-  };
-
-  const reloadChat = (sessionId, title) => {
-    localStorage.setItem('currentSessionId', sessionId);
-    localStorage.setItem('prefillMessage', title || '');
+    setConversations([]);
     navigate('/public/chat');
   };
 
   const formatDate = (dateStr) => {
     try {
       const date = new Date(dateStr);
-      return date.toLocaleString('fr-FR', {
-        day: '2-digit',
-        month: '2-digit',
-        year: 'numeric',
-        hour: '2-digit',
-        minute: '2-digit'
-      });
+      const now = new Date();
+      const diff = now - date;
+      const minutes = Math.floor(diff / 60000);
+      const hours = Math.floor(diff / 3600000);
+      const days = Math.floor(diff / 86400000);
+      
+      if (minutes < 1) return "À l'instant";
+      if (minutes < 60) return `Il y a ${minutes} min`;
+      if (hours < 24) return `Il y a ${hours} h`;
+      if (days < 7) return `Il y a ${days} j`;
+      return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
     } catch {
       return dateStr;
     }
   };
 
-  const getFilteredHistory = () => {
-    if (filter === 'urgent') {
-      return history.filter(item => item.urgency === true);
-    }
-    return history;
-  };
-
-  const filteredHistory = getFilteredHistory();
-
   if (loading) {
     return (
       <PublicLayout>
-        <div className="history-loading">
-          <div className="spinner"></div>
-          <p>Chargement de votre historique...</p>
-        </div>
-      </PublicLayout>
-    );
-  }
-
-  if (error) {
-    return (
-      <PublicLayout>
-        <div className="history-error">
-          <div className="error-icon">⚠️</div>
-          <h3>Erreur de chargement</h3>
-          <p>{error}</p>
-          <button className="retry-btn" onClick={loadHistory}>Réessayer</button>
+        <div className="public-history-page">
+          <div className="history-loading">
+            <div className="loading-dots">
+              <span></span><span></span><span></span>
+            </div>
+            <p>Chargement...</p>
+          </div>
         </div>
       </PublicLayout>
     );
@@ -146,135 +107,100 @@ const PublicHistoryPage = () => {
 
   return (
     <PublicLayout>
-      <div className="history-page">
-        <div className="history-header">
-          <div className="history-title">
-            <h1>📋 Historique des consultations</h1>
-            <p>Retrouvez l'ensemble de vos conversations médicales</p>
+      <div className="public-history-page">
+        <div className="history-topbar">
+          <div className="topbar-left">
+            <span className="topbar-icon">🌐</span>
+            <h1>Ma consultation en cours</h1>
           </div>
-          {history.length > 0 && (
-            <button className="clear-all-btn" onClick={clearAllHistory}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                <polyline points="3 6 5 6 21 6"></polyline>
-                <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
-              </svg>
-              Tout effacer
-            </button>
-          )}
+          <button className="new-chat-btn" onClick={startNewChat}>
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="12" y1="5" x2="12" y2="19"/>
+              <line x1="5" y1="12" x2="19" y2="12"/>
+            </svg>
+            Nouvelle consultation
+          </button>
         </div>
 
-        {history.length > 0 && (
-          <div className="history-filters">
-            <button 
-              className={`filter-btn ${filter === 'all' ? 'active' : ''}`}
-              onClick={() => setFilter('all')}
-            >
-              Toutes
-            </button>
-            <button 
-              className={`filter-btn ${filter === 'urgent' ? 'active' : ''}`}
-              onClick={() => setFilter('urgent')}
-            >
-              🚨 Urgences
+        {conversations.length === 0 ? (
+          <div className="history-empty">
+            <div className="empty-icon">💬</div>
+            <h3>Aucune consultation en cours</h3>
+            <p>Commencez une consultation médicale pour voir votre conversation apparaître ici.</p>
+            <button className="empty-start-btn" onClick={startNewChat}>
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <line x1="22" y1="2" x2="11" y2="13"/>
+                <polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+              Commencer une consultation
             </button>
           </div>
-        )}
-
-        <div className="history-container">
-          {filteredHistory.length === 0 ? (
-            <div className="empty-state">
-              <div className="empty-icon">📭</div>
-              <h3>Aucune consultation</h3>
-              <p>Vos conversations apparaîtront ici après avoir consulté MedAssist.</p>
-              <button className="start-btn" onClick={() => navigate('/public/chat')}>
-                ✨ Commencer une consultation
+        ) : (
+          <div className="history-container">
+            <div className="session-info">
+              <div className="info-badge">
+                <span className="badge-icon">🟢</span>
+                Session active
+              </div>
+              <button className="refresh-btn" onClick={loadCurrentSession}>
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
+                </svg>
+                Actualiser
               </button>
             </div>
-          ) : (
-            <>
-              <div className="history-stats">
-                <div className="stats-left">
-                  <span className="stats-count">📊 {filteredHistory.length} consultation(s)</span>
-                  {filter === 'urgent' && <span className="stats-badge">⚠️ Urgences uniquement</span>}
-                </div>
-                <button className="refresh-btn" onClick={loadHistory}>
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                    <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
-                  </svg>
-                  Actualiser
-                </button>
-              </div>
-              <div className="history-list">
-                {filteredHistory.map((item) => (
-                  <div key={item.id || item._id} className="history-card">
-                    <div className="card-header">
-                      <div className="card-info">
-                        <span className="card-date">
-                          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect>
-                            <line x1="16" y1="2" x2="16" y2="6"></line>
-                            <line x1="8" y1="2" x2="8" y2="6"></line>
-                            <line x1="3" y1="10" x2="21" y2="10"></line>
-                          </svg>
-                          {formatDate(item.date || item.createdAt)}
-                        </span>
-                        {item.urgency && (
-                          <span className="card-urgency">
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                              <circle cx="12" cy="12" r="10"></circle>
-                              <line x1="12" y1="8" x2="12" y2="12"></line>
-                              <line x1="12" y1="16" x2="12.01" y2="16"></line>
-                            </svg>
-                            Urgence
-                          </span>
-                        )}
-                        <span className="card-messages">
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-                          </svg>
-                          {item.messageCount || 0} messages
-                        </span>
-                      </div>
-                      <button 
-                        className="delete-btn"
-                        onClick={() => deleteHistoryItem(item.id || item._id)}
-                        title="Supprimer"
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <line x1="18" y1="6" x2="6" y2="18"></line>
-                          <line x1="6" y1="6" x2="18" y2="18"></line>
-                        </svg>
-                      </button>
+
+            <div className="history-list">
+              {conversations.map((item) => (
+                <div key={item.id} className="history-card">
+                  <div className="card-header">
+                    <div className="card-date">
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <circle cx="12" cy="12" r="10"/>
+                        <polyline points="12 6 12 12 16 14"/>
+                      </svg>
+                      {formatDate(item.date)}
                     </div>
-                    
-                    <div className="card-symptoms">
-                      <span className="label">📝 Consultation</span>
-                      <p>{item.title || item.symptoms || 'Consultation médicale'}</p>
-                    </div>
-                    
-                    <div className="card-preview">
-                      <span className="label">💬 Aperçu</span>
-                      <p>{item.preview || (item.response && item.response.substring(0, 120)) || 'Aucun détail'}</p>
-                    </div>
-                    
-                    <div className="card-footer">
-                      <button 
-                        className="reconsult-btn"
-                        onClick={() => reloadChat(item.sessionId, item.symptoms || item.title)}
-                      >
-                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                          <path d="M2 12a10 10 0 1 0 20 0 10 10 0 0 0-20 0z"></path>
-                          <polyline points="12 6 12 12 16 14"></polyline>
-                        </svg>
-                        Reconsulter
-                      </button>
+                    <div className="message-count">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                      </svg>
+                      {item.messageCount} messages
                     </div>
                   </div>
-                ))}
+                  
+                  <div className="card-title">
+                    {item.title}
+                  </div>
+                  
+                  {item.preview && (
+                    <div className="card-preview">
+                      {item.preview.length > 150 ? item.preview.substring(0, 150) + '…' : item.preview}
+                    </div>
+                  )}
+                  
+                  <div className="card-footer">
+                    <button className="continue-btn" onClick={continueChat}>
+                      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <polygon points="5 3 19 12 5 21 5 3"/>
+                      </svg>
+                      Continuer la consultation
+                    </button>
+                  </div>
+                </div>
+              ))}
+              
+              <div className="info-message">
+                <span>💡</span>
+                <p>
+                  Les consultations non connectées sont conservées temporairement. 
+                  <button className="link-btn" onClick={() => navigate('/login')}> Connectez-vous</button> 
+                  pour sauvegarder votre historique.
+                </p>
               </div>
-            </>
-          )}
-        </div>
+            </div>
+          </div>
+        )}
       </div>
     </PublicLayout>
   );

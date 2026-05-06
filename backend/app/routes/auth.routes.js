@@ -96,8 +96,121 @@ router.post('/login', async (req, res) => {
 router.get('/me', auth, async (req, res) => {
   try {
     const user = await User.findById(req.user.userId).select('-password');
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
     res.json(user);
   } catch (error) {
+    console.error('Erreur GET /me:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ AJOUTER CETTE ROUTE - Mettre à jour le profil utilisateur
+router.put('/update', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { name, email, phone, age, gender, medicalHistory } = req.body;
+
+    console.log('📝 Mise à jour profil pour user:', userId);
+    console.log('📝 Données reçues:', { name, email, phone, age, gender, medicalHistory });
+
+    // Vérifier si l'utilisateur existe
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Vérifier si l'email n'est pas déjà utilisé par un autre utilisateur
+    if (email && email !== user.email) {
+      const existingUser = await User.findOne({ email, _id: { $ne: userId } });
+      if (existingUser) {
+        return res.status(400).json({ error: 'Cet email est déjà utilisé' });
+      }
+    }
+
+    // Mise à jour des champs
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (email !== undefined) updateData.email = email;
+    if (phone !== undefined) updateData.phone = phone;
+    if (age !== undefined) updateData.age = age;
+    if (gender !== undefined) updateData.gender = gender;
+    if (medicalHistory !== undefined) updateData.medicalHistory = medicalHistory;
+
+    const updatedUser = await User.findByIdAndUpdate(
+      userId,
+      { $set: updateData },
+      { new: true, runValidators: true }
+    ).select('-password');
+
+    console.log('✅ Profil mis à jour avec succès');
+
+    res.json({
+      success: true,
+      message: 'Profil mis à jour avec succès',
+      user: updatedUser
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur mise à jour profil:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ AJOUTER CETTE ROUTE - Changer le mot de passe
+router.put('/change-password', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    const { currentPassword, newPassword } = req.body;
+
+    if (!currentPassword || !newPassword) {
+      return res.status(400).json({ error: 'Mot de passe actuel et nouveau mot de passe requis' });
+    }
+
+    if (newPassword.length < 6) {
+      return res.status(400).json({ error: 'Le nouveau mot de passe doit contenir au moins 6 caractères' });
+    }
+
+    const user = await User.findById(userId);
+    if (!user) {
+      return res.status(404).json({ error: 'Utilisateur non trouvé' });
+    }
+
+    // Vérifier le mot de passe actuel
+    const isValid = await user.comparePassword(currentPassword);
+    if (!isValid) {
+      return res.status(401).json({ error: 'Mot de passe actuel incorrect' });
+    }
+
+    // Mettre à jour le mot de passe
+    user.password = newPassword;
+    await user.save();
+
+    res.json({
+      success: true,
+      message: 'Mot de passe mis à jour avec succès'
+    });
+
+  } catch (error) {
+    console.error('❌ Erreur changement mot de passe:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// ✅ AJOUTER CETTE ROUTE - Supprimer le compte (optionnel)
+router.delete('/account', auth, async (req, res) => {
+  try {
+    const userId = req.user.userId;
+    
+    await User.findByIdAndDelete(userId);
+    
+    res.json({
+      success: true,
+      message: 'Compte supprimé avec succès'
+    });
+  } catch (error) {
+    console.error('❌ Erreur suppression compte:', error);
     res.status(500).json({ error: error.message });
   }
 });
