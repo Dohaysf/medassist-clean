@@ -26,7 +26,7 @@ print(f"✅ {len(rag_data)} entrées chargées")
 
 # 2. Connexion à ChromaDB
 print("\n🔌 Connexion à ChromaDB...")
-client = chromadb.HttpClient(host="localhost", port=8001)
+client = chromadb.HttpClient(host="localhost", port=8000)
 
 # 3. Supprimer l'ancienne collection si elle existe
 try:

@@ -1,162 +1,240 @@
+// backend/app/routes/chat.js
 const express = require('express');
 const router = express.Router();
+const multer = require('multer');
+const fs = require('fs');
+const axios = require('axios');
+const FormData = require('form-data');
+
 const { handleChat, resetChatSession, cleanupSessions, getUserHistory } = require('../controllers/chatController');
 const { escaladeUrgence } = require('../services/processMessageGroq');
 const auth = require('../middleware/auth');
 
-// Route normale de chat
+// ── Multer ────────────────────────────────────────────────────────────────────
+// Multer avec extension préservée pour que Python/ffmpeg reconnaisse le format
+const storage = multer.diskStorage({
+    destination: 'uploads/audio/',
+    filename: function(req, file, cb) {
+        const ext = file.originalname.split('.').pop() || 'wav';
+        cb(null, Date.now() + '.' + ext);
+    }
+});
+const upload = multer({ storage: storage });
+
+// ── Config Whisper local ──────────────────────────────────────────────────────
+// Dans .env ajouter :  USE_LOCAL_WHISPER=true  et  WHISPER_SERVICE_URL=http://localhost:8001
+const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || 'http://localhost:8001';
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Fonction : proxy vers le microservice Python Whisper
+// Le backend Node lit le fichier et le renvoie au service Python
+// ─────────────────────────────────────────────────────────────────────────────
+async function transcribeWithWhisperLocal(filePath, language) {
+    const fileBuffer = fs.readFileSync(filePath);
+    const ext = filePath.split('.').pop() || 'webm';
+
+    const mimeTypes = {
+        webm: 'audio/webm',
+        wav: 'audio/wav',
+        mp4: 'audio/mp4',
+        m4a: 'audio/mp4',
+        ogg: 'audio/ogg',
+        mp3: 'audio/mpeg',
+    };
+    const mimeType = mimeTypes[ext] || 'audio/webm';
+
+    const formData = new FormData();
+    // Le service Python attend le champ "file" (pas "audio")
+    // Forcer .wav si c'est du WAV — ffmpeg le lira sans conversion
+    const filename = ext === 'wav' ? 'audio.wav' : `audio.${ext}`;
+    formData.append('file', fileBuffer, {
+        filename: filename,
+        contentType: mimeType,
+    });
+    formData.append('language', language);
+
+    console.log(`📤 → Whisper local: ${fileBuffer.length} bytes [${mimeType}]`);
+
+    try {
+        const response = await axios.post(
+            `${WHISPER_SERVICE_URL}/transcribe`,
+            formData, {
+                headers: {...formData.getHeaders() },
+                timeout: 60000,
+                maxContentLength: Infinity,
+                maxBodyLength: Infinity,
+            }
+        );
+        return response.data.transcript || '';
+    } catch (err) {
+        if (err.code === 'ECONNREFUSED') {
+            throw new Error(
+                `Service Whisper non démarré sur ${WHISPER_SERVICE_URL}.\n` +
+                `Lance : cd whisper_service && python main.py`
+            );
+        }
+        const detail = (err.response && err.response.data && err.response.data.detail) ? err.response.data.detail : err.message;
+        throw new Error(`Whisper local: ${detail}`);
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/transcribe
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/transcribe', upload.single('audio'), async(req, res) => {
+    if (!req.file) {
+        return res.status(400).json({ error: 'Aucun fichier audio reçu' });
+    }
+
+    const filePath = req.file.path;
+    const language = req.body.language || 'fr';
+
+    try {
+        const transcript = await transcribeWithWhisperLocal(filePath, language);
+        console.log(`✅ Transcription OK: "${transcript.substring(0, 80)}"`);
+        res.json({ transcript, service: 'local' });
+    } catch (err) {
+        console.error('❌ Transcription échouée:', err.message);
+        res.status(500).json({
+            error: 'Erreur de transcription audio',
+            details: err.message,
+        });
+    } finally {
+        if (fs.existsSync(filePath)) fs.unlink(filePath, () => {});
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : GET /api/chat/whisper-health
+// ─────────────────────────────────────────────────────────────────────────────
+router.get('/whisper-health', async(req, res) => {
+    try {
+        const r = await axios.get(`${WHISPER_SERVICE_URL}/health`, { timeout: 5000 });
+        res.json({ status: 'healthy', ...r.data });
+    } catch {
+        res.status(503).json({
+            status: 'unhealthy',
+            hint: `Lance: cd whisper_service && python main.py`,
+        });
+    }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/', handleChat);
 
-// Route pour réinitialiser une session
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/reset-session
+// ─────────────────────────────────────────────────────────────────────────────
 router.post('/reset-session', resetChatSession);
 
-// Route pour déclenchement manuel de l'urgence
-router.post('/emergency-manual', async (req, res) => {
-  try {
-    const { sessionId, summary } = req.body;
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId requis' });
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/emergency-manual
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/emergency-manual', async(req, res) => {
+    try {
+        const { sessionId, summary } = req.body;
+        if (!sessionId) return res.status(400).json({ error: 'sessionId requis' });
+
+        const result = await escaladeUrgence(
+            summary || {}, sessionId, "Déclenchement manuel par bouton"
+        );
+        res.json({ success: true, reply: result.reply });
+    } catch (error) {
+        console.error('Erreur urgence manuelle:', error);
+        res.status(500).json({ error: "Erreur lors de l'alerte" });
     }
-    const result = await escaladeUrgence(summary || {}, sessionId, "Déclenchement manuel par bouton");
-    res.json({ success: true, reply: result.reply });
-  } catch (error) {
-    console.error('Erreur urgence manuelle:', error);
-    res.status(500).json({ error: 'Erreur lors de l’alerte' });
-  }
 });
 
-// ✅ ROUTE PUBLIQUE : Récupérer l'historique (sans auth pour les non connectés)
-router.get('/public/history', async (req, res) => {
-  try {
-    // Pour les utilisateurs non connectés, retourner un tableau vide
-    // ou récupérer par sessionId si besoin
-    const sessionId = req.headers['x-session-id'];
-    if (sessionId) {
-      const Conversation = require('../models/Conversation');
-      const conv = await Conversation.findOne({ sessionId }).sort({ updatedAt: -1 });
-      if (conv) {
-        return res.json([{
-          id: conv._id,
-          sessionId: conv.sessionId,
-          date: conv.updatedAt ? new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
-          title: conv.title || 'Consultation médicale',
-          preview: conv.messages?.[0]?.text?.substring(0, 100) || 'Aucun message',
-          messageCount: conv.messages?.length || 0,
-          urgency: conv.messages?.some(m => m.text?.includes('URGENCE')) || false
-        }]);
-      }
-    }
-    res.json([]);
-  } catch (error) {
-    console.error('Erreur récupération historique public:', error);
-    res.status(500).json({ error: 'Erreur lors de la récupération' });
-  }
-});
-
-// ROUTE : Récupérer l'historique de l'utilisateur connecté
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : GET /api/chat/history
+// ─────────────────────────────────────────────────────────────────────────────
 router.get('/history', auth, getUserHistory);
 
-// ROUTE : Supprimer une conversation spécifique
-router.delete('/history/:id', auth, async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id;
-    const { id } = req.params;
-    const Conversation = require('../models/Conversation');
-    
-    const result = await Conversation.findOneAndDelete({ _id: id, userId });
-    
-    if (!result) {
-      return res.status(404).json({ error: 'Conversation non trouvée' });
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : DELETE /api/chat/history/all  (AVANT /:id !)
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/history/all', auth, async(req, res) => {
+    try {
+        const userId = req.user.userId || req.user.id;
+        const Conversation = require('../models/Conversation');
+        const result = await Conversation.deleteMany({ userId });
+        console.log(`🗑️ ${result.deletedCount} conversations supprimées — user ${userId}`);
+        res.json({ success: true, deletedCount: result.deletedCount });
+    } catch (error) {
+        console.error('Erreur suppression totale:', error);
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
     }
-    
-    console.log(`🗑️ Conversation ${id} supprimée pour user ${userId}`);
-    res.json({ success: true, message: 'Conversation supprimée' });
-  } catch (error) {
-    console.error('Erreur suppression:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression' });
-  }
 });
 
-// ROUTE : Supprimer TOUTES les conversations de l'utilisateur
-router.delete('/history/all', auth, async (req, res) => {
-  try {
-    const userId = req.user.userId || req.user.id;
-    const Conversation = require('../models/Conversation');
-    
-    const result = await Conversation.deleteMany({ userId });
-    
-    console.log(`🗑️ ${result.deletedCount} conversations supprimées pour user ${userId}`);
-    res.json({ success: true, deletedCount: result.deletedCount });
-  } catch (error) {
-    console.error('Erreur suppression totale:', error);
-    res.status(500).json({ error: 'Erreur lors de la suppression' });
-  }
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : DELETE /api/chat/history/:id
+// ─────────────────────────────────────────────────────────────────────────────
+router.delete('/history/:id', auth, async(req, res) => {
+    try {
+        const userId = req.user.userId || req.user.id;
+        const { id } = req.params;
+        const Conversation = require('../models/Conversation');
+        const result = await Conversation.findOneAndDelete({ _id: id, userId });
+        if (!result) return res.status(404).json({ error: 'Conversation non trouvée' });
+        console.log(`🗑️ Conversation ${id} supprimée — user ${userId}`);
+        res.json({ success: true, message: 'Conversation supprimée' });
+    } catch (error) {
+        console.error('Erreur suppression:', error);
+        res.status(500).json({ error: 'Erreur lors de la suppression' });
+    }
 });
 
-// ROUTE : Sauvegarder une conversation
-router.post('/save-session', auth, async (req, res) => {
-  try {
-    const { sessionId, messages } = req.body;
-    const userId = req.user.userId || req.user.id;
-    
-    if (!sessionId) {
-      return res.status(400).json({ error: 'sessionId requis' });
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/save-session
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/save-session', auth, async(req, res) => {
+    try {
+        const { sessionId, messages } = req.body;
+        const userId = req.user.userId || req.user.id;
+
+        if (!sessionId) return res.status(400).json({ error: 'sessionId requis' });
+        if (!messages || !messages.length) return res.status(400).json({ error: 'Aucun message à sauvegarder' });
+
+        const Conversation = require('../models/Conversation');
+
+        const formattedMessages = messages.map(msg => ({
+            sender: msg.role === 'user' || msg.sender === 'user' ? 'user' : 'bot',
+            text: msg.content || msg.text,
+            timestamp: new Date(),
+        }));
+
+        const conversation = await Conversation.findOneAndUpdate({ userId, sessionId }, {
+            $set: {
+                messages: formattedMessages,
+                title: (formattedMessages[0] && formattedMessages[0].text) ? formattedMessages[0].text.substring(0, 50) : 'Consultation médicale',
+                updatedAt: new Date(),
+            },
+            $setOnInsert: { userId, sessionId, createdAt: new Date(), esoSummary: {} },
+        }, { upsert: true, new: true });
+
+        console.log(`✅ Session sauvegardée — user: ${userId}, session: ${sessionId}`);
+        res.json({ success: true, conversationId: conversation._id });
+    } catch (error) {
+        console.error('Erreur sauvegarde session:', error);
+        res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
     }
-    
-    if (!messages || messages.length === 0) {
-      return res.status(400).json({ error: 'Aucun message à sauvegarder' });
-    }
-    
-    const Conversation = require('../models/Conversation');
-    
-    const formattedMessages = messages.map(msg => ({
-      sender: msg.role === 'user' || msg.sender === 'user' ? 'user' : 'bot',
-      text: msg.content || msg.text,
-      timestamp: new Date()
-    }));
-    
-    const conversation = await Conversation.findOneAndUpdate(
-      { userId, sessionId },
-      {
-        $set: {
-          messages: formattedMessages,
-          title: formattedMessages[0]?.text?.substring(0, 50) || 'Consultation médicale',
-          updatedAt: new Date()
-        },
-        $setOnInsert: {
-          userId,
-          sessionId,
-          createdAt: new Date(),
-          esoSummary: {}
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ROUTE : POST /api/chat/cleanup-sessions  (manager)
+// ─────────────────────────────────────────────────────────────────────────────
+router.post('/cleanup-sessions', auth, async(req, res) => {
+    try {
+        if (!req.user || req.user.role !== 'manager') {
+            return res.status(403).json({ error: 'Accès réservé aux managers' });
         }
-      },
-      { upsert: true, new: true }
-    );
-    
-    console.log(`✅ Conversation sauvegardée - User: ${userId}, Session: ${sessionId}`);
-    
-    res.json({ 
-      success: true, 
-      message: 'Conversation sauvegardée avec succès',
-      conversationId: conversation._id
-    });
-  } catch (error) {
-    console.error('Erreur sauvegarde session:', error);
-    res.status(500).json({ error: 'Erreur lors de la sauvegarde' });
-  }
-});
-
-// Route pour nettoyer les sessions inactives (admin uniquement)
-router.post('/cleanup-sessions', auth, async (req, res) => {
-  try {
-    if (!req.user || req.user.role !== 'manager') {
-      return res.status(403).json({ error: 'Accès réservé aux managers' });
+        await cleanupSessions(req, res);
+    } catch (error) {
+        console.error('Erreur nettoyage sessions:', error);
+        res.status(500).json({ error: 'Erreur lors du nettoyage' });
     }
-    await cleanupSessions(req, res);
-  } catch (error) {
-    console.error('Erreur nettoyage sessions:', error);
-    res.status(500).json({ error: 'Erreur lors du nettoyage' });
-  }
 });
 
 module.exports = router;

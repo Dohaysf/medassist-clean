@@ -1,6 +1,6 @@
 /* ============================================
    PatientChat.css — style Claude.ai
-   avec boutons localisation et urgence
+   avec boutons localisation, urgence et micro
    ============================================ */
 
 :root {
@@ -13,6 +13,7 @@
     --border-input: #e3e1db;
     --accent: #c96a3a;
     --danger: #d9534f;
+    --mic-active: #e53e3e;
 }
 
 .chat-page {
@@ -25,7 +26,7 @@
 }
 
 
-/* Topbar */
+/* ── Topbar ──────────────────────────────────────────────────────────────── */
 
 .chat-topbar {
     padding: 13px 24px;
@@ -53,8 +54,26 @@
     border: 1px solid var(--border-input);
 }
 
+.new-chat-btn {
+    font-size: 0.8rem;
+    font-weight: 500;
+    background: var(--bg-card);
+    color: var(--text-secondary);
+    border: 1px solid var(--border-input);
+    border-radius: 8px;
+    padding: 5px 12px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
 
-/* Zone des messages */
+.new-chat-btn:hover {
+    background: #f0ede6;
+    border-color: #c4c0b8;
+    color: var(--text-primary);
+}
+
+
+/* ── Zone des messages ───────────────────────────────────────────────────── */
 
 .chat-messages {
     flex: 1;
@@ -80,7 +99,7 @@
 }
 
 
-/* Écran d'accueil */
+/* ── Écran d'accueil ─────────────────────────────────────────────────────── */
 
 .chat-welcome {
     display: flex;
@@ -138,7 +157,7 @@
 }
 
 
-/* Bulles de message */
+/* ── Bulles de message ───────────────────────────────────────────────────── */
 
 .msg-row {
     display: flex;
@@ -215,7 +234,7 @@
 }
 
 
-/* Indicateur de frappe */
+/* ── Indicateur de frappe ────────────────────────────────────────────────── */
 
 .typing-indicator {
     display: flex;
@@ -252,7 +271,7 @@
 }
 
 
-/* Zone de saisie */
+/* ── Zone de saisie ──────────────────────────────────────────────────────── */
 
 .chat-input-area {
     padding: 12px 24px 20px;
@@ -293,6 +312,9 @@
     color: var(--text-muted);
 }
 
+
+/* ── Boutons outils ──────────────────────────────────────────────────────── */
+
 .input-tool-btn {
     width: 34px;
     height: 34px;
@@ -305,6 +327,7 @@
     cursor: pointer;
     color: var(--text-muted);
     transition: all 0.15s;
+    flex-shrink: 0;
 }
 
 .input-tool-btn:hover:not(:disabled) {
@@ -317,6 +340,66 @@
     cursor: not-allowed;
 }
 
+
+/* ── Bouton microphone ───────────────────────────────────────────────────── */
+
+.mic-btn {
+    /* état par défaut : identique aux autres input-tool-btn */
+    user-select: none;
+    -webkit-user-select: none;
+    touch-action: none;
+    /* évite le scroll accidentel sur mobile */
+}
+
+.mic-btn.mic-active {
+    color: var(--mic-active);
+    background: rgba(229, 62, 62, 0.1);
+    animation: micPulse 1s ease-in-out infinite;
+}
+
+.mic-btn.mic-active svg {
+    /* légère animation de l'icône pendant l'écoute */
+    animation: micIconScale 0.8s ease-in-out infinite alternate;
+}
+
+@keyframes micPulse {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 0 5px rgba(229, 62, 62, 0);
+    }
+}
+
+@keyframes micIconScale {
+    from {
+        transform: scale(1);
+    }
+    to {
+        transform: scale(1.15);
+    }
+}
+
+.mic-btn.mic-loading {
+    color: var(--accent);
+    opacity: 0.7;
+    animation: micSpin 1s linear infinite;
+    pointer-events: none;
+}
+
+@keyframes micSpin {
+    from {
+        transform: rotate(0deg);
+    }
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+
+/* ── Bouton urgence ──────────────────────────────────────────────────────── */
+
 .emergency-btn {
     color: var(--danger);
 }
@@ -324,6 +407,9 @@
 .emergency-btn:hover:not(:disabled) {
     background: rgba(217, 83, 79, 0.1);
 }
+
+
+/* ── Bouton envoyer ──────────────────────────────────────────────────────── */
 
 .input-send-btn {
     width: 34px;
@@ -336,6 +422,8 @@
     justify-content: center;
     cursor: pointer;
     color: #f9f7f3;
+    flex-shrink: 0;
+    transition: all 0.15s;
 }
 
 .input-send-btn:hover:not(:disabled) {
@@ -350,7 +438,16 @@
 }
 
 
-/* Messages géolocalisation */
+/* ── Géolocalisation ─────────────────────────────────────────────────────── */
+
+.location-btn {
+    color: #2EC5C0;
+}
+
+.location-btn:hover:not(:disabled) {
+    background: rgba(46, 197, 192, 0.1);
+    color: #1a9e9a;
+}
 
 .location-prompt {
     font-size: 0.7rem;
@@ -374,6 +471,49 @@
     cursor: pointer;
 }
 
+
+/* Badge localisation dans la bulle utilisateur */
+
+.message-location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(46, 197, 192, 0.15);
+    color: #2EC5C0;
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    margin-top: 8px;
+    width: fit-content;
+}
+
+.msg-row.user .message-location-badge {
+    background: rgba(46, 197, 192, 0.2);
+    color: #1a9e9a;
+}
+
+
+/* ── Message système (notifications géoloc) ──────────────────────────────── */
+
+.system-message {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0;
+}
+
+.system-message-content {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-muted);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    max-width: 80%;
+    text-align: center;
+}
+
+
+/* ── Hint bas de page ────────────────────────────────────────────────────── */
+
 .chat-input-hint {
     font-size: 0.72rem;
     color: var(--text-muted);
@@ -382,7 +522,7 @@
 }
 
 
-/* Responsive */
+/* ── Responsive ──────────────────────────────────────────────────────────── */
 
 @media (max-width: 768px) {
     .chat-messages,
@@ -393,48 +533,71 @@
     .msg-bubble {
         max-width: 85vw;
     }
-}/* Badge localisation dans le message utilisateur */
-.message-location-badge {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  background: rgba(46, 197, 192, 0.15);
-  color: #2EC5C0;
-  padding: 4px 12px;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  margin-top: 8px;
-  width: fit-content;
 }
 
-.msg-row.user .message-location-badge {
-  background: rgba(46, 197, 192, 0.2);
-  color: #1a9e9a;
+
+/* ── RTL (arabe) ─────────────────────────────────────────────────────────── */
+
+.chat-page.rtl .msg-row.user {
+    flex-direction: row;
+    align-self: flex-start;
 }
 
-/* Message système (localisation partagée) */
-.system-message {
-  display: flex;
-  justify-content: center;
-  margin: 8px 0;
+.chat-page.rtl .msg-row.assistant {
+    flex-direction: row-reverse;
+    align-self: flex-end;
 }
 
-.system-message-content {
-  background: rgba(0, 0, 0, 0.05);
-  color: var(--text-muted);
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.7rem;
-  max-width: 80%;
-  text-align: center;
+.chat-page.rtl .msg-bubble.rtl {
+    border-radius: 16px;
+    border-top-right-radius: 3px;
+    border-top-left-radius: 16px;
 }
 
-/* Bouton localisation */
-.location-btn {
-  color: #2EC5C0;
+.chat-page.rtl .msg-row.user .msg-bubble {
+    border-top-left-radius: 3px;
+    border-top-right-radius: 16px;
 }
 
-.location-btn:hover:not(:disabled) {
-  background: rgba(46, 197, 192, 0.1);
-  color: #1a9e9a;
+.chat-page.rtl .msg-time.rtl {
+    text-align: left;
+}
+
+.chat-page.rtl .chat-input-box {
+    flex-direction: row-reverse;
+}
+
+.chat-page.rtl textarea {
+    text-align: right;
+    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
+}
+
+
+/* ── Topbar actions ──────────────────────────────────────────────────────── */
+
+.chat-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+
+/* ── Bouton langue ───────────────────────────────────────────────────────── */
+
+.lang-toggle-btn {
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: var(--bg-card);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+    white-space: nowrap;
+}
+
+.lang-toggle-btn:hover {
+    background: var(--accent);
+    color: #fff;
 }

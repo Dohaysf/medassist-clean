@@ -12,7 +12,7 @@ model = SentenceTransformer('distiluse-base-multilingual-cased-v2')
 print(f"✅ Modèle chargé (dimension: {model.get_sentence_embedding_dimension()})")
 
 # Connexion à ChromaDB
-client = chromadb.HttpClient(host="localhost", port=8001)
+client = chromadb.HttpClient(host="localhost", port=8000)
 print("✅ Connecté à ChromaDB")
 
 # Récupérer la collection
