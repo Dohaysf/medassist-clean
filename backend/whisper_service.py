@@ -1,8 +1,6 @@
 # whisper_service/main.py
-# ─────────────────────────────────────────────────────────────────────────────
 # Lancement : python main.py
 # Test      : curl http://localhost:8001/health
-# ─────────────────────────────────────────────────────────────────────────────
 
 import os, sys, shutil, tempfile, subprocess, threading
 import numpy as np
@@ -24,32 +22,38 @@ else:
 print(f"✅ ffmpeg: {FFMPEG_EXECUTABLE}")
 os.environ["PATH"] = os.path.dirname(FFMPEG_EXECUTABLE) + os.pathsep + os.environ.get("PATH", "")
 
-import whisper, torch
+import whisper
+import torch
 from fastapi import FastAPI, File, UploadFile, Form, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 
 # ── Config ────────────────────────────────────────────────────────────────────
-# small = meilleur en français/arabe, tiny = plus rapide mais moins précis
-MODEL_SIZE = os.getenv("WHISPER_MODEL", "small")
-DEVICE     = "cuda" if torch.cuda.is_available() else "cpu"
-# Nombre de threads CPU pour accélérer l'inférence
-N_THREADS  = min(8, os.cpu_count() or 4)
+DEVICE    = "cuda" if torch.cuda.is_available() else "cpu"
+N_THREADS = min(8, os.cpu_count() or 4)
 torch.set_num_threads(N_THREADS)
 
-print(f"🎙️  Chargement Whisper '{MODEL_SIZE}' sur {DEVICE.upper()} ({N_THREADS} threads)...")
-model = whisper.load_model(MODEL_SIZE, device=DEVICE)
-# Pré-chauffer le modèle avec un audio silencieux pour éviter le lag du 1er appel
-_dummy = np.zeros(16000, dtype=np.float32)
-model.transcribe(_dummy, language="fr", fp16=False, temperature=0.0)
-print(f"✅ Modèle prêt (préchauffé) — port 8001")
+print(f"🔧 Device: {DEVICE}")
 
-# ── Sémaphore : 1 transcription à la fois (évite surcharge CPU) ───────────────
+# ── Modèle UNIQUE : small (rapide, bon pour français et acceptable pour arabe) ──
+# Si vous voulez un meilleur arabe, utilisez "base" (plus rapide) ou "small"
+# Évitez "medium" qui cause des timeouts
+MODEL_NAME = "small"   # ou "base" si vous voulez encore plus rapide
+print(f"🔄 Chargement du modèle {MODEL_NAME}...")
+model = whisper.load_model(MODEL_NAME, device=DEVICE)
+print(f"✅ Modèle {MODEL_NAME} chargé sur {DEVICE}")
+
+# Préchauffage du modèle (optionnel)
+_dummy = np.zeros(16000, dtype=np.float32)
+# Utilisation de transcribe pour préchauffer
+_ = model.transcribe(_dummy, language="fr", fp16=(DEVICE == "cuda"), temperature=0.0)
+print(f"✅ Modèle préchauffé — port 8001")
+
+# Sémaphore : 1 transcription à la fois (évite la surcharge GPU)
 _sem = threading.Semaphore(1)
 
-app = FastAPI(title="Whisper Local", version="2.0.0")
+app = FastAPI(title="Whisper Service", version="3.1.0")
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
-# ── Conversion vers WAV 16kHz mono ────────────────────────────────────────────
 def to_wav(input_path: str) -> str:
     out = input_path + ".wav"
     r = subprocess.run(
@@ -61,21 +65,19 @@ def to_wav(input_path: str) -> str:
         raise RuntimeError(f"ffmpeg: {r.stderr.decode()[-200:]}")
     return out
 
-# ── Transcription ─────────────────────────────────────────────────────────────
 @app.post("/transcribe")
 async def transcribe(
     file: UploadFile = File(...),
     language: str    = Form("fr"),
 ):
-    # Langues supportées
-    lang_map = {"fr": "fr", "ar": "ar", "en": "en"}
-    lang = lang_map.get(language, "fr")
-
+    # Support français, arabe, anglais
+    lang = language if language in ("fr", "ar", "en") else "fr"
+    
     audio_bytes = await file.read()
-    print(f"📥 {file.filename} — {len(audio_bytes)} bytes — [{lang}]")
+    print(f"📥 {file.filename} — {len(audio_bytes)} bytes — [{lang}] → modèle {MODEL_NAME} sur {DEVICE}")
 
     if len(audio_bytes) < 1000:
-        return {"transcript": ""}
+        return {"transcript": "", "model": MODEL_NAME}
 
     suffix    = os.path.splitext(file.filename or "audio.webm")[1] or ".webm"
     tmp_input = None
@@ -86,7 +88,6 @@ async def transcribe(
             f.write(audio_bytes)
             tmp_input = f.name
 
-        # WAV natif → pas de conversion
         if suffix.lower() == ".wav":
             tmp_wav = tmp_input
         else:
@@ -94,17 +95,15 @@ async def transcribe(
 
         print(f"🔄 WAV: {os.path.getsize(tmp_wav)} bytes — transcription...")
 
-        # Acquérir le sémaphore (file d'attente si 2 requêtes simultanées)
         _sem.acquire()
         try:
             result = model.transcribe(
                 tmp_wav,
                 language=lang,
-                fp16=(DEVICE == "cuda"),
+                fp16=(DEVICE == "cuda"),   # Active la FP16 si GPU dispo
                 temperature=0.0,
                 condition_on_previous_text=False,
-                # Optimisations vitesse
-                beam_size=1,          # greedy decode = 2-3x plus rapide que beam=5
+                beam_size=1,               # Minimise la latence
                 best_of=1,
                 no_speech_threshold=0.6,
                 compression_ratio_threshold=2.4,
@@ -114,7 +113,7 @@ async def transcribe(
 
         text = result.get("text", "").strip()
         print(f"✅ [{lang}]: \"{text}\"")
-        return {"transcript": text}
+        return {"transcript": text, "model": MODEL_NAME, "device": DEVICE}
 
     except RuntimeError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -130,7 +129,12 @@ async def transcribe(
 
 @app.get("/health")
 def health():
-    return {"status": "ok", "model": MODEL_SIZE, "device": DEVICE, "threads": N_THREADS}
+    return {
+        "status":  "ok",
+        "model":   MODEL_NAME,
+        "device":  DEVICE,
+        "threads": N_THREADS,
+    }
 
 if __name__ == "__main__":
     import uvicorn

@@ -116,10 +116,11 @@ const PatientChat = () => {
   const messagesEndRef = useRef(null);
   const textareaRef    = useRef(null);
 
-  const { speak } = useSpeechSynthesis();
+  const { speak, cancel, speaking } = useSpeechSynthesis();
   const { transcript, transcriptTs, listening, isLoading: micLoading, toggleListening } = useSpeechRecognition();
   const { loading: locLoading, error: locError, getLocation, resetError } = useGeolocation();
 
+  const [playingMsgIdx, setPlayingMsgIdx] = useState(null);
   const locationSentRef = useRef(false);
   const [locationSentInThisConversation, setLocationSentInThisConversation] = useState(false);
 
@@ -223,7 +224,6 @@ const PatientChat = () => {
         localStorage.setItem('currentSessionId', data.sessionId);
       }
       setMessages(prev => [...prev, { role: 'assistant', content: data.reply, time: nowTime() }]);
-      speak(data.reply);
       saveSessionToHistory(data.sessionId || sid, trimmed);
       if (data.esoSummary) saveSessionSummary(data.sessionId || sid, data.esoSummary);
     } catch (error) {
@@ -381,7 +381,37 @@ const PatientChat = () => {
                         formatMessageWithLocation(msg.content)
                       )}
                     </div>
-                    <div className={`msg-time${isRTL ? ' rtl' : ''}`}>{msg.time}</div>
+                    <div className={`msg-footer${isRTL ? ' rtl' : ''}`}>
+                      <span className="msg-time">{msg.time}</span>
+                      {msg.role === 'assistant' && (
+                        <button
+                          className={`audio-play-btn${playingMsgIdx === i ? ' playing' : ''}`}
+                          onClick={() => {
+                            if (playingMsgIdx === i) {
+                              cancel();
+                              setPlayingMsgIdx(null);
+                            } else {
+                              cancel();
+                              setPlayingMsgIdx(i);
+                              speak(msg.content);
+                              setTimeout(() => setPlayingMsgIdx(null), Math.min(msg.content.length * 55 + 1500, 30000));
+                            }
+                          }}
+                          title={playingMsgIdx === i ? (isRTL ? 'إيقاف' : 'Arrêter') : (isRTL ? 'استمع' : 'Écouter')}
+                        >
+                          {playingMsgIdx === i ? (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <rect x="5" y="4" width="4" height="16" rx="1"/>
+                              <rect x="15" y="4" width="4" height="16" rx="1"/>
+                            </svg>
+                          ) : (
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                              <polygon points="5 3 19 12 5 21 5 3"/>
+                            </svg>
+                          )}
+                        </button>
+                      )}
+                    </div>
                   </div>
                 </div>
               );

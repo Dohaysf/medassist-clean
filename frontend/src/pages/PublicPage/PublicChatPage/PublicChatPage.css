@@ -1,5 +1,6 @@
 /* ============================================
    ChatPage.css — couleurs exactes Claude.ai
+   Inclut : messages, input, suggestions, urgence, sauvegarde
    ============================================ */
 
 :root {
@@ -13,6 +14,9 @@
     --accent: #c96a3a;
     /* orange Claude */
     --accent-hover: #b55c30;
+    --accent-soft: #f0ede6;
+    /* fond clair pour hover */
+    --transition: all 0.15s ease;
 }
 
 .chat-page {
@@ -131,7 +135,7 @@
     font-size: 0.85rem;
     color: var(--text-secondary);
     cursor: pointer;
-    transition: all 0.15s;
+    transition: var(--transition);
     font-weight: 400;
     font-family: inherit;
 }
@@ -178,7 +182,7 @@
 }
 
 .msg-avatar.assistant {
-    background: #c96a3a;
+    background: var(--accent);
     color: #fff;
 }
 
@@ -213,9 +217,6 @@
     border-top-right-radius: 3px;
     color: var(--text-primary);
 }
-
-
-/* Time */
 
 .msg-time {
     font-size: 0.7rem;
@@ -310,9 +311,6 @@
     color: var(--text-muted);
 }
 
-
-/* Tool buttons */
-
 .input-tool-btn {
     width: 34px;
     height: 34px;
@@ -324,7 +322,7 @@
     justify-content: center;
     cursor: pointer;
     color: var(--text-muted);
-    transition: all 0.15s;
+    transition: var(--transition);
     flex-shrink: 0;
 }
 
@@ -332,9 +330,6 @@
     background: #f0ede6;
     color: var(--text-secondary);
 }
-
-
-/* Send button */
 
 .input-send-btn {
     width: 34px;
@@ -347,7 +342,7 @@
     justify-content: center;
     cursor: pointer;
     color: #f9f7f3;
-    transition: all 0.15s;
+    transition: var(--transition);
     flex-shrink: 0;
 }
 
@@ -370,6 +365,108 @@
 }
 
 
+/* ===== BOUTON NOUVEAU CHAT ===== */
+
+.new-chat-btn {
+    background: transparent;
+    border: 1px solid var(--border-input);
+    border-radius: 20px;
+    padding: 6px 14px;
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.new-chat-btn:hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+
+/* ===== BADGE URGENCE ===== */
+
+.urgency-badge {
+    display: inline-block;
+    background: #ef4444;
+    color: white;
+    font-size: 0.65rem;
+    font-weight: 500;
+    padding: 2px 8px;
+    border-radius: 12px;
+    margin-left: 10px;
+    vertical-align: middle;
+}
+
+
+/* ===== SECTION SAUVEGARDE ===== */
+
+.save-section {
+    padding: 16px 24px;
+    background: var(--bg-card);
+    border-top: 1px solid var(--border);
+    margin-top: auto;
+}
+
+.save-prompt {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 12px;
+}
+
+.save-prompt p {
+    font-size: 0.8rem;
+    color: var(--text-secondary);
+    margin: 0;
+}
+
+.save-buttons {
+    display: flex;
+    gap: 10px;
+}
+
+.save-buttons button {
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.75rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.save-buttons button:first-child,
+.save-buttons button:nth-child(2) {
+    background: transparent;
+    border: 1px solid var(--border-input);
+    color: var(--text-secondary);
+}
+
+.save-buttons button:first-child:hover,
+.save-buttons button:nth-child(2):hover {
+    background: var(--accent-soft);
+    border-color: var(--accent);
+    color: var(--accent);
+}
+
+.save-btn {
+    background: var(--accent);
+    color: white;
+    border: none;
+    padding: 8px 20px;
+    border-radius: 40px;
+    font-size: 0.8rem;
+    cursor: pointer;
+    transition: var(--transition);
+}
+
+.save-btn:hover {
+    background: var(--accent-hover);
+    transform: translateY(-1px);
+}
+
+
 /* ===== RESPONSIVE ===== */
 
 @media (max-width: 768px) {
@@ -384,98 +481,4 @@
     .msg-bubble {
         max-width: 85vw;
     }
-}/* Nouveau chat button */
-.new-chat-btn {
-  background: transparent;
-  border: 1px solid var(--border-input);
-  border-radius: 20px;
-  padding: 6px 14px;
-  font-size: 0.75rem;
-  color: var(--text-secondary);
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.new-chat-btn:hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-/* Urgence badge */
-.urgency-badge {
-  display: inline-block;
-  background: #ef4444;
-  color: white;
-  font-size: 0.65rem;
-  font-weight: 500;
-  padding: 2px 8px;
-  border-radius: 12px;
-  margin-left: 10px;
-  vertical-align: middle;
-}
-
-/* Save section */
-.save-section {
-  padding: 16px 24px;
-  background: var(--bg-card);
-  border-top: 1px solid var(--border);
-  margin-top: auto;
-}
-
-.save-prompt {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 12px;
-}
-
-.save-prompt p {
-  font-size: 0.8rem;
-  color: var(--text-secondary);
-  margin: 0;
-}
-
-.save-buttons {
-  display: flex;
-  gap: 10px;
-}
-
-.save-buttons button {
-  padding: 6px 14px;
-  border-radius: 20px;
-  font-size: 0.75rem;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.save-buttons button:first-child,
-.save-buttons button:nth-child(2) {
-  background: transparent;
-  border: 1px solid var(--border-input);
-  color: var(--text-secondary);
-}
-
-.save-buttons button:first-child:hover,
-.save-buttons button:nth-child(2):hover {
-  background: var(--primary-soft);
-  border-color: var(--primary);
-  color: var(--primary);
-}
-
-.save-btn {
-  background: var(--primary);
-  color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 40px;
-  font-size: 0.8rem;
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.save-btn:hover {
-  background: var(--primary-dark);
-  transform: translateY(-1px);
 }

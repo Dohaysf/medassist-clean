@@ -601,3 +601,58 @@
     background: var(--accent);
     color: #fff;
 }
+
+
+/* ── Bouton audio sous les messages assistant ────────────────────────────── */
+
+.msg-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 0 4px;
+}
+
+.msg-footer.rtl {
+    flex-direction: row-reverse;
+}
+
+.audio-play-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 22px;
+    height: 22px;
+    border-radius: 50%;
+    border: 1px solid var(--border-input);
+    background: var(--bg-card);
+    color: var(--text-muted);
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+    padding: 0;
+}
+
+.audio-play-btn:hover {
+    background: #f0ede6;
+    border-color: var(--accent);
+    color: var(--accent);
+    transform: scale(1.1);
+}
+
+.audio-play-btn.playing {
+    background: var(--accent);
+    border-color: var(--accent);
+    color: #fff;
+    animation: audioPlaying 1.2s ease-in-out infinite;
+}
+
+@keyframes audioPlaying {
+    0%,
+    100% {
+        box-shadow: 0 0 0 0 rgba(201, 106, 58, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 4px rgba(201, 106, 58, 0);
+    }
+}

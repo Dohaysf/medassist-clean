@@ -1,7 +1,6 @@
 // backend/app/services/processMessageGroq.js
 const { callGroq } = require('./groqService');
 const { evaluateSeverity } = require('./nlpService');
-const { getRAGResponse } = require('./ragService');
 const axios = require('axios');
 require('dotenv').config();
 
@@ -9,41 +8,23 @@ require('dotenv').config();
 const D7_API_KEY = process.env.D7_API_KEY;
 const EMERGENCY_PHONE = process.env.EMERGENCY_PHONE || "+212602641467";
 
-// ================= CHAMPS REQUIS POUR ESO =================
-const REQUIRED_FIELDS = [
-    "symptom",
-    "bodyPart",
-    "duration",
-    "age",
-    "patientLocation"
-];
+const REQUIRED_FIELDS = ["symptom", "bodyPart", "duration", "age", "patientLocation"];
 
-// ================= FONCTIONS UTILITAIRES =================
 function getMissing(summary) {
     return REQUIRED_FIELDS.filter(f => !summary[f]);
 }
 
 function detectLanguage(message) {
-    const arabicPattern = /[\u0600-\u06FF]/;
-    return arabicPattern.test(message) ? 'ar' : 'fr';
+    return /[\u0600-\u06FF]/.test(message) ? 'ar' : 'fr';
 }
 
-// ================= ENVOI SMS URGENCE =================
+// ================= SMS, PFA, URGENCE (inchangés) =================
 async function sendEmergencySMS(esoSummary, sessionId, reason) {
     if (!D7_API_KEY) {
         console.error("❌ D7_API_KEY manquante");
         return false;
     }
-
-    const alertMessage = `🚨 URGENCE MEDICALE
-Session: ${sessionId}
-Symptôme: ${esoSummary.symptom || 'N/A'}
-Localisation: ${esoSummary.bodyPart || 'N/A'}
-Durée: ${esoSummary.duration || 'N/A'}
-Âge: ${esoSummary.age || 'N/A'}
-Lieu: ${esoSummary.patientLocation || 'N/A'}
-Raison: ${reason}`;
-
+    const alertMessage = `🚨 URGENCE MEDICALE\nSession: ${sessionId}\nSymptôme: ${esoSummary.symptom || 'N/A'}\nLocalisation: ${esoSummary.bodyPart || 'N/A'}\nDurée: ${esoSummary.duration || 'N/A'}\nÂge: ${esoSummary.age || 'N/A'}\nLieu: ${esoSummary.patientLocation || 'N/A'}\nRaison: ${reason}`;
     try {
         await axios.post('https://api.d7networks.com/messages/v1/send', {
             messages: [{
@@ -70,7 +51,6 @@ Raison: ${reason}`;
     }
 }
 
-// ================= ENVOI VERS PFA =================
 async function sendToPFA(summary, sessionId) {
     try {
         await axios.post('http://localhost:3000/api/chatbot/emergency', {
@@ -83,16 +63,13 @@ async function sendToPFA(summary, sessionId) {
     }
 }
 
-// ================= ESCALADE URGENCE =================
 async function escaladeUrgence(summary, sessionId, reason, confidence = null) {
     console.warn(`🚨 [ESCALADE] ${reason}`);
     await sendEmergencySMS(summary, sessionId, reason);
-
     const lang = detectLanguage(JSON.stringify(summary));
     const reply = lang === 'ar' ?
         `⚠️ **حالة طارئة طبية**\n\nاتصل فوراً بالإسعاف على الرقم **141**\n\nتم إرسال تنبيه للفريق الطبي.` :
         `⚠️ **ALERTE MÉDICALE**\n\nSituation nécessitant une attention immédiate.\n\nAppellez le **SAMU** au **141**.\n\nUn message d'alerte a été envoyé à l'équipe médicale.`;
-
     return {
         reply: reply,
         intent: "escalade_urgence",
@@ -101,52 +78,49 @@ async function escaladeUrgence(summary, sessionId, reason, confidence = null) {
     };
 }
 
-// ================= EXTRACTION GROQ =================
+// ================= EXTRACTION GROQ (FR + AR avec exemples) =================
 async function extractWithGroq(message, currentSummary) {
     const prompt = `
-Tu es un assistant médical.
+Tu es un assistant médical. Extrais les informations cliniques du message ci-dessous.
+Message : "${message}"
 
-Analyse le message et extrais les informations utiles.
-
-Message:
-"${message}"
-
-Données actuelles:
-${JSON.stringify(currentSummary)}
-
-Réponds STRICTEMENT en JSON:
-
+Réponds STRICTEMENT en JSON avec ces champs :
 {
-  "symptom": "...",
-  "bodyPart": "...",
-  "duration": "...",
-  "intensity": nombre,
-  "age": nombre,
-  "patientLocation": "..."
+  "symptom": "le symptôme principal (en français ou en arabe, selon la langue du message)",
+  "bodyPart": "partie du corps ou null",
+  "duration": "durée ou null",
+  "age": "nombre (âge) ou null",
+  "patientLocation": "lieu ou null",
+  "intensity": "nombre 1-10 ou null"
 }
 
-Règles:
-- Compréhension intelligente (ex: "ça s'aggrave" → intensité élevée)
-- Champs inconnus → null
-- Pas de texte hors JSON
-- Pour l'âge, extrais uniquement le nombre
-- Pour l'intensité, extrais un nombre entre 1 et 10
+Règnes :
+- Ne déduis rien qui n'est pas explicitement dit.
+- Pour l'arabe, interprète les expressions naturelles comme "اطفاري هشة" → symptom = "ضعف عظام" ou "fragilité osseuse" (peu importe la langue, l'important est de capturer le sens médical).
+- Si le message dit "ما عنديش مشكل" → ne rien extraire.
+
+Exemples pour t'entraîner (ils ne sont pas exhaustifs) :
+- "j'ai de la fièvre" → {"symptom":"fièvre","bodyPart":null,"duration":null,"age":null,"patientLocation":null,"intensity":null}
+- "عمري 30 سنة و عندي صداع شديد" → {"symptom":"صداع","bodyPart":null,"duration":null,"age":30,"patientLocation":null,"intensity":null}
+- "اطفاري هشة" → {"symptom":"ضعف عظام","bodyPart":null,"duration":null,"age":null,"patientLocation":null,"intensity":null}
+- "mon ami a perdu beaucoup de sang" → {"symptom":"hémorragie","bodyPart":null,"duration":null,"age":null,"patientLocation":null,"intensity":null}
+- "douleur à la poitrine depuis 2 heures" → {"symptom":"douleur","bodyPart":"poitrine","duration":"2 heures","age":null,"patientLocation":null,"intensity":null}
+
+Maintenant, extrais pour ce message : "${message}"
 `;
 
     try {
         const response = await callGroq(prompt);
-        console.log(`📝 [GROQ] Réponse:`, response.substring(0, 200));
-
-        // Extraire le JSON de la réponse
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
             const parsed = JSON.parse(jsonMatch[0]);
             console.log(`✅ [GROQ] Extraction:`, parsed);
             return parsed;
         }
+        console.warn("Aucun JSON trouvé, réponse brute:", response);
         return {};
     } catch (e) {
-        console.error("❌ erreur Groq:", e.message);
+        console.error("❌ Erreur extraction Groq:", e.message);
         return {};
     }
 }
@@ -156,130 +130,109 @@ async function askQuestion(field, lang = 'fr') {
     const questions = {
         fr: {
             symptom: "Quel est le problème principal ?",
-            bodyPart: "Où avez-vous mal ?",
+            bodyPart: "Où exactement ? (partie du corps)",
             duration: "Depuis quand ?",
             age: "Quel âge a le patient ?",
             patientLocation: "Où se trouve le patient ?"
         },
         ar: {
             symptom: "ما هي المشكلة الرئيسية؟",
-            bodyPart: "أين تشعر بالألم؟",
+            bodyPart: "أين بالضبط؟ (جزء من الجسم)",
             duration: "منذ متى؟",
             age: "كم عمر المريض؟",
             patientLocation: "أين يوجد المريض؟"
         }
     };
-
     return questions[lang][field] || questions.fr[field];
 }
 
 // ================= VÉRIFICATION URGENCE =================
 function checkEmergency(message, summary) {
     const urgentKeywords = [
-        'urgence', 'secours', 'aide', 'au secours', 'samu',
-        'دعاء', 'مساعدة', 'الإسعاف', 'طوارئ',
-        'douleur thoracique', 'douleur poitrine', 'étouffement',
-        'inconscience', 'perte connaissance', 'convulsion',
-        'ألم في الصدر', 'ضيق التنفس', 'فقدان الوعي'
+        'urgence', 'secours', 'samu', 'hémorragie', 'hemorragie', 'perte de sang',
+        'دعاء', 'مساعدة', 'الإسعاف', 'نزيف',
+        'douleur thoracique', 'étouffement', 'inconscience'
     ];
-
-    const messageLower = message.toLowerCase();
-    const symptomLower = (summary.symptom || '').toLowerCase();
-
-    for (const keyword of urgentKeywords) {
-        if (messageLower.includes(keyword) || symptomLower.includes(keyword)) {
-            return true;
-        }
-    }
-    return false;
+    const msg = message.toLowerCase();
+    const sym = (summary.symptom || '').toLowerCase();
+    return urgentKeywords.some(kw => msg.includes(kw) || sym.includes(kw));
 }
 
 // ================= PROCESS PRINCIPAL =================
 async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null) {
-
     console.log(`\n📨 [MESSAGE] "${userMessage}"`);
     console.log(`📊 [ÉTAT ACTUEL]`, JSON.stringify(currentSummary));
 
-    // Détecter la langue
-    const lang = detectLanguage(userMessage);
-    console.log(`🌐 [LANGUE] ${lang}`);
-
-    // 1. Vérifier urgence
-    if (checkEmergency(userMessage, currentSummary)) {
-        console.log("🚨 [URGENCE] Détectée!");
-        return await escaladeUrgence(currentSummary, sessionId, "Mot-clé d'urgence détecté", 1.0);
+    // Réinitialiser si la session précédente était complète
+    if (currentSummary && currentSummary._complete === true) {
+        console.log(`🔄 [RESET] Session complète → nouvelle collecte`);
+        currentSummary = {};
     }
 
-    // 2. Extraction IA
+    const lang = detectLanguage(userMessage);
+
+    // Urgence
+    if (checkEmergency(userMessage, currentSummary)) {
+        console.log("🚨 [URGENCE] Détectée!");
+        return await escaladeUrgence(currentSummary, sessionId, "Mot-clé d'urgence", 1.0);
+    }
+
+    // Extraction
     const extracted = await extractWithGroq(userMessage, currentSummary);
 
-    // 3. Mettre à jour le résumé
+    // Mise à jour (ignorer null)
     const updatedSummary = {
         ...currentSummary,
         ...Object.fromEntries(
-            Object.entries(extracted).filter(([_, v]) => v !== null && v !== "")
+            Object.entries(extracted).filter(([_, v]) => v !== null && v !== "" && v !== undefined)
         )
     };
+    delete updatedSummary._complete;
 
     console.log(`📊 [RÉSUMÉ MIS À JOUR]`, JSON.stringify(updatedSummary));
 
-    // 4. Évaluer la sévérité
-    const severity = evaluateSeverity(updatedSummary);
+    // Sévérité
+    let severity = evaluateSeverity(updatedSummary);
+    if (updatedSummary.symptom && (updatedSummary.symptom.includes('hémorragie') || updatedSummary.symptom.includes('نزيف'))) {
+        severity = 'critique';
+    }
     console.log(`⚠️ [SÉVÉRITÉ] ${severity}`);
 
-    // 5. AGE obligatoire en premier
+    // Priorité à l'âge
     if (!updatedSummary.age) {
-        console.log(`❓ [QUESTION] Âge manquant`);
         return {
             reply: await askQuestion('age', lang),
             extractedInfo: extracted,
             intent: "ask_age",
-            severity: severity
+            severity,
+            updatedSummary
         };
     }
 
-    // 6. Vérifier les champs ESO manquants
     const missing = getMissing(updatedSummary);
-    console.log(`❓ [CHAMPS MANQUANTS] ${missing.join(', ') || 'Aucun'}`);
-
-    // 7. Si tout est complet → FIN
     if (missing.length === 0) {
-        console.log(`✅ [COMPLET] Envoi à PFA...`);
-
-        if (sessionId) {
-            await sendToPFA(updatedSummary, sessionId);
-        }
-
-        // Générer un résumé pour l'utilisateur
-        let summaryReply = '';
-        if (lang === 'ar') {
-            summaryReply = `✅ **تم جمع جميع المعلومات**\n\n📋 الأعراض: ${updatedSummary.symptom}\n📍 الموقع: ${updatedSummary.bodyPart}\n⏱️ المدة: ${updatedSummary.duration}\n👤 العمر: ${updatedSummary.age} سنة\n📍 الموقع الحالي: ${updatedSummary.patientLocation}\n\n🚨 مستوى الطوارئ: ${severity}`;
-        } else {
-            summaryReply = `✅ **Informations complètes**\n\n📋 Symptôme: ${updatedSummary.symptom}\n📍 Localisation: ${updatedSummary.bodyPart}\n⏱️ Durée: ${updatedSummary.duration}\n👤 Âge: ${updatedSummary.age} ans\n📍 Position: ${updatedSummary.patientLocation}\n\n🚨 Niveau d'urgence: ${severity}`;
-        }
-
+        await sendToPFA(updatedSummary, sessionId);
+        const reply = lang === 'ar' ?
+            `✅ **تم جمع جميع المعلومات**\n\n📋 الأعراض: ${updatedSummary.symptom}\n📍 الموقع: ${updatedSummary.bodyPart || 'غير محدد'}\n⏱️ المدة: ${updatedSummary.duration}\n👤 العمر: ${updatedSummary.age} سنة\n📍 الموقع الحالي: ${updatedSummary.patientLocation}\n\n🚨 مستوى الطوارئ: ${severity}` :
+            `✅ **Informations complètes**\n\n📋 Symptôme: ${updatedSummary.symptom}\n📍 Localisation: ${updatedSummary.bodyPart || 'Non spécifiée'}\n⏱️ Durée: ${updatedSummary.duration}\n👤 Âge: ${updatedSummary.age} ans\n📍 Position: ${updatedSummary.patientLocation}\n\n🚨 Niveau d'urgence: ${severity}`;
         return {
-            reply: summaryReply,
+            reply,
             extractedInfo: extracted,
             intent: "complete",
-            severity: severity,
-            esoSummary: updatedSummary
+            severity,
+            esoSummary: updatedSummary,
+            updatedSummary: {...updatedSummary, _complete: true }
         };
     }
 
-    // 8. Poser la prochaine question
     const nextField = missing[0];
-    console.log(`❓ [PROCHAINE QUESTION] ${nextField}`);
-
     return {
         reply: await askQuestion(nextField, lang),
         extractedInfo: extracted,
         intent: "collect",
-        severity: severity
+        severity,
+        updatedSummary
     };
 }
 
-module.exports = {
-    processMessageGroq,
-    escaladeUrgence
-};
+module.exports = { processMessageGroq, escaladeUrgence };
