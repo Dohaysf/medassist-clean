@@ -2,7 +2,12 @@
 # Lancement : python main.py
 # Test      : curl http://localhost:8001/health
 
-import os, sys, shutil, tempfile, subprocess, threading
+import os
+import sys
+import shutil
+import tempfile
+import subprocess
+import threading
 import numpy as np
 
 # ── Détection ffmpeg ──────────────────────────────────────────────────────────
@@ -35,8 +40,6 @@ torch.set_num_threads(N_THREADS)
 print(f"🔧 Device: {DEVICE}")
 
 # ── Modèle UNIQUE : small (rapide, bon pour français et acceptable pour arabe) ──
-# Si vous voulez un meilleur arabe, utilisez "base" (plus rapide) ou "small"
-# Évitez "medium" qui cause des timeouts
 MODEL_NAME = "small"   # ou "base" si vous voulez encore plus rapide
 print(f"🔄 Chargement du modèle {MODEL_NAME}...")
 model = whisper.load_model(MODEL_NAME, device=DEVICE)
@@ -44,7 +47,6 @@ print(f"✅ Modèle {MODEL_NAME} chargé sur {DEVICE}")
 
 # Préchauffage du modèle (optionnel)
 _dummy = np.zeros(16000, dtype=np.float32)
-# Utilisation de transcribe pour préchauffer
 _ = model.transcribe(_dummy, language="fr", fp16=(DEVICE == "cuda"), temperature=0.0)
 print(f"✅ Modèle préchauffé — port 8001")
 
@@ -100,10 +102,10 @@ async def transcribe(
             result = model.transcribe(
                 tmp_wav,
                 language=lang,
-                fp16=(DEVICE == "cuda"),   # Active la FP16 si GPU dispo
+                fp16=(DEVICE == "cuda"),
                 temperature=0.0,
                 condition_on_previous_text=False,
-                beam_size=1,               # Minimise la latence
+                beam_size=1,
                 best_of=1,
                 no_speech_threshold=0.6,
                 compression_ratio_threshold=2.4,

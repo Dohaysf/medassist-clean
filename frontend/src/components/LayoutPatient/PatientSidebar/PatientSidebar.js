@@ -30,7 +30,6 @@ const PatientSidebar = () => {
         }).then(res => {
             setUser(res.data);
             setLoading(false);
-            // Stocker le userId pour que PatientChat puisse l'utiliser
             const uid = res.data._id || res.data.id;
             if (uid) localStorage.setItem('userId', uid);
         }).catch(err => {
@@ -39,7 +38,7 @@ const PatientSidebar = () => {
         });
     }, []);
 
-    // Récupération des sessions récentes — filtrées par utilisateur connecté
+    // Récupération des sessions récentes
     useEffect(() => {
         if (!user) return;
         try {
@@ -60,14 +59,12 @@ const PatientSidebar = () => {
         }
     }, [user]);
 
-    // Extraire la première lettre du prénom ou du nom
     const getInitial = () => {
         if (!user || !user.name) return '?';
         const firstName = user.name.trim().split(' ')[0];
         return firstName.charAt(0).toUpperCase();
     };
 
-    // Couleur dynamique basée sur la lettre
     const getAvatarColor = (letter) => {
         const colors = [
             '#2EC5C0', '#7B61FF', '#FF9F4A', '#F05454', '#4B9F8C',
@@ -83,18 +80,14 @@ const PatientSidebar = () => {
         window.location.href = '/login';
     };
 
-    // Charger une session spécifique
     const loadSession = (sessionId) => {
         localStorage.setItem('currentSessionId', sessionId);
         navigate('/Patient/chat');
         window.location.reload();
     };
 
-    // Nouvelle consultation : réinitialiser la session
     const newConsultation = () => {
         const newSessionId = Date.now().toString();
-
-        // Sauvegarder la nouvelle session liée à l'utilisateur
         try {
             let userId = 'guest';
             if (user) {
@@ -113,7 +106,6 @@ const PatientSidebar = () => {
         } catch (e) {
             console.error('Erreur sauvegarde session:', e);
         }
-
         localStorage.setItem('currentSessionId', newSessionId);
         navigate('/Patient/chat');
         window.location.reload();
@@ -123,136 +115,95 @@ const PatientSidebar = () => {
     const avatarColor = getAvatarColor(userInitial);
     const displayName = user && user.name ? user.name : 'Utilisateur';
 
-    return ( <
-            aside className = "Patient-sidebar" > { /* HEADER */ } <
-            div className = "Patient-sidebar-logo" >
-            <
-            h2 > MedAssist < /h2> < /
-            div >
+    return (
+        <aside className="Patient-sidebar">
+            {/* HEADER */}
+            <div className="Patient-sidebar-logo">
+                <h2>MedAssist</h2>
+            </div>
 
-            { /* NEW CHAT */ } <
-            button className = "new-chat-btn"
-            onClick = { newConsultation } >
-            <
-            span className = "plus-icon" > + < /span>
-            Nouvelle consultation <
-            /button>
+            {/* NEW CHAT */}
+            <button className="new-chat-btn" onClick={newConsultation}>
+                <span className="plus-icon">+</span>
+                Nouvelle consultation
+            </button>
 
-            { /* SCROLL AREA */ } <
-            div className = "sidebar-content" > { /* NAVIGATION */ } <
-            nav className = "Patient-sidebar-nav" >
-            <
-            NavLink to = "/Patient/chat"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaComments className = "Patient-nav-icon" / >
-            <
-            span > Chat médical < /span> < /
-            NavLink > <
-            NavLink to = "/Patient/patients"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaUsers className = "Patient-nav-icon" / >
-            <
-            span > Mes patients < /span> < /
-            NavLink > <
-            NavLink to = "/Patient/info"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaUserMd className = "Patient-nav-icon" / >
-            <
-            span > Mon profil < /span> < /
-            NavLink > <
-            NavLink to = "/Patient/history"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaHistory className = "Patient-nav-icon" / >
-            <
-            span > Historique < /span> < /
-            NavLink > <
-            NavLink to = "/Patient/eso"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaFileAlt className = "Patient-nav-icon" / >
-            <
-            span > Résumés ESO < /span> < /
-            NavLink > <
-            NavLink to = "/Patient/settings"
-            className = {
-                ({ isActive }) => isActive ? 'active' : ''
-            } >
-            <
-            FaCog className = "Patient-nav-icon" / >
-            <
-            span > Paramètres < /span> < /
-            NavLink > <
-            /nav>
+            {/* SCROLL AREA */}
+            <div className="sidebar-content">
+                {/* NAVIGATION */}
+                <nav className="Patient-sidebar-nav">
+                    <NavLink to="/Patient/chat" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaComments className="Patient-nav-icon" />
+                        <span>Chat médical</span>
+                    </NavLink>
+                    <NavLink to="/Patient/patients" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaUsers className="Patient-nav-icon" />
+                        <span>Mes patients</span>
+                    </NavLink>
+                    <NavLink to="/Patient/info" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaUserMd className="Patient-nav-icon" />
+                        <span>Mon profil</span>
+                    </NavLink>
+                    <NavLink to="/Patient/history" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaHistory className="Patient-nav-icon" />
+                        <span>Historique</span>
+                    </NavLink>
+                    <NavLink to="/Patient/eso" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaFileAlt className="Patient-nav-icon" />
+                        <span>Résumés ESO</span>
+                    </NavLink>
+                    <NavLink to="/Patient/settings" className={({ isActive }) => isActive ? 'active' : ''}>
+                        <FaCog className="Patient-nav-icon" />
+                        <span>Paramètres</span>
+                    </NavLink>
+                </nav>
 
-            { /* RECENTS — depuis localStorage */ } <
-            div className = "sidebar-recents" >
-            <
-            div className = "sidebar-section-label" > Récents < /div> {
-            recentSessions.length === 0 ? ( <
-                div className = "recent-item-empty" > Aucune discussion récente < /div>
-            ) : (
-                recentSessions.map(session => ( <
-                    div key = { session.id }
-                    className = "recent-item"
-                    onClick = {
-                        () => loadSession(session.id)
-                    }
-                    title = { session.title || 'Conversation' } >
-                    <
-                    div className = "recent-item-title" > { session.title || 'Consultation' } < /div> <
-                    div className = "recent-item-date" > {
-                        new Date(session.updatedAt).toLocaleDateString('fr-FR', {
-                            day: '2-digit',
-                            month: 'short',
-                            hour: '2-digit',
-                            minute: '2-digit'
-                        })
-                    } <
-                    /div> < /
-                    div >
-                ))
-            )
-        } <
-        /div> < /
-        div >
+                {/* RECENTS */}
+                <div className="sidebar-recents">
+                    <div className="sidebar-section-label">Récents</div>
+                    {recentSessions.length === 0 ? (
+                        <div className="recent-item-empty">Aucune discussion récente</div>
+                    ) : (
+                        recentSessions.map(session => (
+                            <div 
+                                key={session.id} 
+                                className="recent-item"
+                                onClick={() => loadSession(session.id)}
+                                title={session.title || 'Conversation'}
+                            >
+                                <div className="recent-item-title">{session.title || 'Consultation'}</div>
+                                <div className="recent-item-date">
+                                    {new Date(session.updatedAt).toLocaleDateString('fr-FR', {
+                                        day: '2-digit',
+                                        month: 'short',
+                                        hour: '2-digit',
+                                        minute: '2-digit'
+                                    })}
+                                </div>
+                            </div>
+                        ))
+                    )}
+                </div>
+            </div>
 
-        { /* FOOTER */ } <
-        div className = "Patient-sidebar-footer" >
-        <
-        div className = "user-info" >
-        <
-        div className = "user-avatar"
-    style = {
-            { backgroundColor: avatarColor }
-        } > {!loading ? userInitial : '...' } <
-        /div> <
-    span className = "user-name" > { displayName } < /span> < /
-        div > <
-        button onClick = { handleLogout }
-    className = "Patient-logout-btn" >
-        <
-        FaSignOutAlt className = "Patient-nav-icon" / >
-        Déconnexion <
-        /button> < /
-        div > <
-        /aside>
-);
+            {/* FOOTER */}
+            <div className="Patient-sidebar-footer">
+                <div className="user-info">
+                    <div className="user-avatar" style={{ backgroundColor: avatarColor }}>
+                        {!loading ? userInitial : '...'}
+                    </div>
+                    <span className="user-name">{displayName}</span>
+                </div>
+                <button onClick={handleLogout} className="Patient-logout-btn">
+                    <FaSignOutAlt className="Patient-nav-icon" />
+                    Déconnexion
+                </button>
+            </div>
+        </aside>
+    );
 };
-// ── Exporter generateSessionSummary pour PatientChat ─────────────────────────
+
+// Export de la fonction utilitaire
 export const generateSessionSummary = (esoSummary) => {
     if (!esoSummary) return null;
     const parts = [];
@@ -263,4 +214,5 @@ export const generateSessionSummary = (esoSummary) => {
     if (parts.length === 0) return null;
     return parts.join(' • ').substring(0, 60);
 };
+
 export default PatientSidebar;

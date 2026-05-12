@@ -14,13 +14,15 @@ const normalizeText = (text) => {
 // ================= DICTIONNAIRES =================
 const SYMPTOM_KEYWORDS = {
   douleur: ["mal", "douleur", "douloureux", "fait mal"],
-  dyspnee: ["respire", "essoufflement", "souffle", "oppression"],
-  cardiaque: ["coeur", "cardiaque", "poitrine", "thorax"],
+  dyspnee: ["respire", "essoufflement", "souffle", "oppression", "respirer", "suffocation", "étouffement"],
+  cardiaque: ["coeur", "cardiaque", "poitrine", "thorax", "infarctus", "crise cardiaque"],
   nausee: ["nausée", "vomissement", "mal au coeur"],
   fievre: ["fièvre", "temperature", "chaud", "frissons"],
   traumatisme: ["chute", "accident", "coup", "blessure"],
-  saignement: ["saigne", "sang", "hémorragie"],
-  brulure: ["brûlure", "brulure", "crampe"]
+  saignement: ["saigne", "sang", "hémorragie", "perte de sang"],
+  brulure: ["brûlure", "brulure", "crampe"],
+  inconscience: ["inconscient", "évanouissement", "coma", "perte connaissance", "ne répond plus"],
+  hemorragie: ["hémorragie", "saignement abondant", "perte sang"]
 };
 
 const BODY_PARTS = {
@@ -32,12 +34,56 @@ const BODY_PARTS = {
   bras: ["bras", "avant-bras", "coude", "épaule"],
   cou: ["cou", "nuque"],
   pied: ["pied", "cheville"],
-  main: ["main", "poignet"]
+  main: ["main", "poignet"],
+  poumon: ["poumon", "poumons", "bronches", "respiration"]
 };
 
-// ================= EXTRACTION SIMPLIFIÉE =================
+// ================= MOTS-CLÉS URGENCE CRITIQUE =================
+const CRITICAL_KEYWORDS = [
+  // Respiratoire
+  'ne respire plus', 'ne respire pas', 'respire plus', 'respire pas',
+  'difficulté à respirer', 'difficulté respiratoire', 'peux pas respirer',
+  'je ne peux pas respirer', 'je peux pas respirer', 'ne peut pas respirer',
+  'étouffement', 'suffocation', 'asphyxie', 'manque d\'air', 'essoufflement severe',
+  'respiration difficile', 'haletant', 'respire mal',
+  
+  // Cardiaque
+  'crise cardiaque', 'infarctus', 'arrêt cardiaque', 'arrêt respiratoire',
+  'douleur thoracique', 'douleur poitrine', 'serrement poitrine',
+  
+  // Inconscience
+  'inconscience', 'évanouissement', 'perte de connaissance', 'coma',
+  'ne répond plus', 'ne bouge plus', 'est inconscient',
+  
+  // Hémorragie
+  'hémorragie grave', 'saignement abondant', 'perte de sang importante'
+];
+
+// ================= DÉTECTION URGENCE CRITIQUE =================
+const isCriticalEmergency = (message) => {
+  const msg = message.toLowerCase().trim();
+  
+  for (const kw of CRITICAL_KEYWORDS) {
+    if (msg.includes(kw)) {
+      console.log(`🚨 [CRITICAL] Mot-clé détecté: "${kw}"`);
+      return true;
+    }
+  }
+  
+  // Problème respiratoire
+  if ((msg.includes('respir') || msg.includes('souffle')) && 
+      (msg.includes('pas') || msg.includes('plus') || msg.includes('difficile') || msg.includes('mal'))) {
+    console.log(`🚨 [CRITICAL] Problème respiratoire détecté`);
+    return true;
+  }
+  
+  return false;
+};
+
+// ================= EXTRACTION AMÉLIORÉE =================
 const extractInfo = (message, summary = {}) => {
   const normalized = normalizeText(message);
+  const originalMsg = message.toLowerCase();
   const info = {};
 
   // Symptôme
@@ -46,6 +92,18 @@ const extractInfo = (message, summary = {}) => {
       info.symptom = symptom;
       break;
     }
+  }
+  
+  // Vérification supplémentaire pour les problèmes respiratoires
+  if (originalMsg.includes('respir') || originalMsg.includes('souffle')) {
+    info.symptom = 'dyspnee';
+  }
+  
+  // Vérification pour douleur thoracique
+  if ((originalMsg.includes('douleur') || originalMsg.includes('mal')) && 
+      (originalMsg.includes('poitrine') || originalMsg.includes('thorax'))) {
+    info.symptom = 'cardiaque';
+    info.bodyPart = 'poitrine';
   }
 
   // Partie du corps
@@ -94,16 +152,43 @@ const extractInfo = (message, summary = {}) => {
   return info;
 };
 
-// ================= ÉVALUATION SÉVÉRITÉ =================
+// ================= ÉVALUATION SÉVÉRITÉ AMÉLIORÉE =================
 const evaluateSeverity = (summary) => {
+  const symptom = (summary.symptom || '').toLowerCase();
+  const bodyPart = (summary.bodyPart || '').toLowerCase();
   const intensity = Number(summary.intensity);
   const duration = summary.duration ? parseInt(summary.duration) : 0;
 
-  // Cas critiques absolus
-  if (summary.symptom === 'cardiaque') return 'critique';
-  if (summary.symptom === 'douleur' && summary.bodyPart === 'poitrine') return 'critique';
-  if (summary.symptom === 'dyspnee') return 'critique';
-  if (summary.symptom === 'saignement') return 'critique';
+  console.log(`🔍 [SEVERITY] Symptôme: ${symptom}, BodyPart: ${bodyPart}, Intensity: ${intensity}`);
+
+  // ✅ CAS CRITIQUES - Priorité absolue
+  if (symptom.includes('dyspnee') || symptom.includes('respir') || 
+      bodyPart.includes('poumon') || symptom.includes('souffle')) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Problème respiratoire`);
+    return 'critique';
+  }
+  
+  if (symptom.includes('cardiaque') || symptom.includes('coeur') || 
+      (symptom.includes('douleur') && bodyPart.includes('poitrine'))) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Problème cardiaque`);
+    return 'critique';
+  }
+  
+  if (symptom.includes('hemorragie') || symptom.includes('saignement')) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Hémorragie`);
+    return 'critique';
+  }
+  
+  if (symptom.includes('inconscience')) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Perte de conscience`);
+    return 'critique';
+  }
+
+  // Cas critiques standards
+  if (symptom === 'cardiaque') return 'critique';
+  if (symptom === 'douleur' && bodyPart === 'poitrine') return 'critique';
+  if (symptom === 'dyspnee') return 'critique';
+  if (symptom === 'saignement') return 'critique';
   
   // Combinaison intensité + durée
   if (intensity >= 8) return 'critique';
@@ -115,7 +200,7 @@ const evaluateSeverity = (summary) => {
   return 'inconnue';
 };
 
-// ================= FALLBACK (rarement utilisé) =================
+// ================= FALLBACK =================
 const generateReply = (summary) => {
   if (!summary.symptom) return "Quel est le problème principal ?";
   if (!summary.bodyPart) return "Où avez-vous mal ?";
@@ -144,5 +229,6 @@ module.exports = {
   processMessage,
   extractInfo,
   evaluateSeverity,
-  normalizeText
+  normalizeText,
+  isCriticalEmergency
 };

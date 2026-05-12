@@ -1,4 +1,3 @@
-// backend/app/controllers/chatController.js
 const { processMessage } = require('../services/nlpService');
 const ESOBuilder = require('../utils/esoBuilder');
 const Conversation = require('../models/Conversation');
@@ -20,7 +19,7 @@ setInterval(() => {
     }
 }, 600000);
 
-const handleChat = async(req, res) => {
+const handleChat = async (req, res) => {
     try {
         const { message, sessionId, resetSession } = req.body;
         const userId = req.user ? req.user.userId : null;
@@ -32,8 +31,13 @@ const handleChat = async(req, res) => {
         let id = sessionId;
         let isNewSession = false;
 
-        // Gestion de la réinitialisation
-        if (resetSession) {
+        // ✅ Gestion de la réinitialisation - FORCER nouvelle session
+        if (resetSession === true) {
+            // Supprimer l'ancienne session si elle existe
+            if (id && sessions.has(id)) {
+                sessions.delete(id);
+                console.log(`🗑️ Ancienne session ${id} supprimée (reset demandé)`);
+            }
             id = Date.now().toString();
             isNewSession = true;
             console.log('🆕 NOUVELLE SESSION (reset demandé):', id);
@@ -47,8 +51,8 @@ const handleChat = async(req, res) => {
 
         let sessionData = sessions.get(id);
 
-        // Si resetSession est true, on force la création d'un nouveau builder
-        if (resetSession || !sessionData) {
+        // ✅ Créer un nouveau builder pour les nouvelles sessions
+        if (isNewSession || !sessionData) {
             const newBuilder = new ESOBuilder();
             sessions.set(id, {
                 builder: newBuilder,
@@ -56,10 +60,10 @@ const handleChat = async(req, res) => {
                 createdAt: new Date()
             });
             sessionData = sessions.get(id);
-            console.log('📋 Nouveau builder ESO créé pour session:', id);
+            console.log('📋 Nouveau builder ESO créé (session propre)');
         } else {
             sessionData.lastAccess = Date.now();
-            console.log('📋 Builder ESO existant réutilisé pour session:', id);
+            console.log('📋 Builder ESO existant réutilisé');
         }
 
         const builder = sessionData.builder;
@@ -84,14 +88,10 @@ const handleChat = async(req, res) => {
         }
 
         const summary = builder.getSummary();
-
         console.log('📋 [APRÈS] Résumé ESO:', JSON.stringify(summary));
-        if (confidence) console.log(`📊 Score de confiance: ${Math.round(confidence * 100)}%`);
 
         // Sauvegarde en base MongoDB
-        console.log('⏳ Tentative de sauvegarde MongoDB...');
         try {
-            // Générer un titre à partir du premier message
             let title = 'Consultation médicale';
             if (summary.symptom) {
                 title = `${summary.symptom} ${summary.bodyPart || ''}`.trim();
@@ -100,7 +100,6 @@ const handleChat = async(req, res) => {
                 title = message.substring(0, 50);
             }
 
-            // Vérifier si la conversation existe déjà
             let existingConversation = await Conversation.findOne({ sessionId: id });
 
             let updateData = {
@@ -130,10 +129,8 @@ const handleChat = async(req, res) => {
                 updateData.$set.createdAt = new Date();
             }
 
-            const dbResult = await Conversation.findOneAndUpdate({ sessionId: id },
-                updateData, { upsert: true, new: true }
-            );
-            console.log('✅ Sauvegarde réussie, ID doc:', dbResult._id);
+            await Conversation.findOneAndUpdate({ sessionId: id }, updateData, { upsert: true, new: true });
+            console.log('✅ Sauvegarde MongoDB réussie');
         } catch (dbError) {
             console.error('❌ Erreur MongoDB:', dbError.message);
         }
@@ -153,20 +150,23 @@ const handleChat = async(req, res) => {
     }
 };
 
-const resetChatSession = async(req, res) => {
+const resetChatSession = async (req, res) => {
     try {
         const { sessionId } = req.body;
 
-        // Supprimer la session de la mémoire
+        // ✅ Supprimer complètement la session de la mémoire
         if (sessionId && sessions.has(sessionId)) {
             sessions.delete(sessionId);
-            console.log(`🔄 Session ${sessionId} supprimée de la mémoire`);
+            console.log(`🗑️ Session ${sessionId} supprimée de la mémoire`);
         }
 
-        // Optionnel: marquer la conversation comme réinitialisée en base
+        // ✅ Marquer la conversation comme réinitialisée en base
         if (sessionId) {
             try {
-                await Conversation.findOneAndUpdate({ sessionId: sessionId }, { $set: { resetAt: new Date(), isActive: false } });
+                await Conversation.findOneAndUpdate(
+                    { sessionId: sessionId },
+                    { $set: { resetAt: new Date(), isActive: false, esoSummary: {} } }
+                );
             } catch (dbError) {
                 console.log('Note: Base non mise à jour pour reset');
             }
@@ -186,7 +186,7 @@ const resetChatSession = async(req, res) => {
     }
 };
 
-const cleanupSessions = async(req, res) => {
+const cleanupSessions = async (req, res) => {
     try {
         const now = Date.now();
         let count = 0;
@@ -204,63 +204,33 @@ const cleanupSessions = async(req, res) => {
     }
 };
 
-const getUserHistory = async(req, res) => {
+const getUserHistory = async (req, res) => {
     try {
         const userId = req.user.userId || req.user.id;
         const Conversation = require('../models/Conversation');
 
-        const conversations = await Conversation.find({ userId })
-            .sort({ updatedAt: -1 });
-
-        console.log(`📊 ${conversations.length} conversations trouvées en base pour user ${userId}`);
+        const conversations = await Conversation.find({ userId }).sort({ updatedAt: -1 });
+        console.log(`📊 ${conversations.length} conversations trouvées pour user ${userId}`);
 
         const formatted = conversations.map(conv => {
-            let firstUserMsg = null;
-            if (conv.messages) {
-                firstUserMsg = conv.messages.find(m => m.sender === 'user');
-            }
-
-            let lastBotMsg = null;
-            if (conv.messages) {
-                const botMessages = conv.messages.filter(m => m.sender === 'bot');
-                if (botMessages.length > 0) {
-                    lastBotMsg = botMessages[botMessages.length - 1];
-                }
-            }
+            const firstUserMsg = conv.messages?.find(m => m.sender === 'user');
+            const lastBotMsg = conv.messages?.filter(m => m.sender === 'bot').pop();
 
             let title = conv.title;
             if (!title || title === 'Consultation médicale') {
-                if (firstUserMsg && firstUserMsg.text) {
-                    title = firstUserMsg.text.substring(0, 50);
-                } else {
-                    title = 'Consultation médicale';
-                }
+                title = firstUserMsg?.text?.substring(0, 50) || 'Consultation médicale';
             }
 
-            let preview = 'En attente de réponse...';
-            if (lastBotMsg && lastBotMsg.text) {
-                preview = lastBotMsg.text.substring(0, 120);
-            }
-
-            let hasUrgency = false;
-            if (lastBotMsg && lastBotMsg.text) {
-                hasUrgency = lastBotMsg.text.includes('URGENCE') ||
-                    lastBotMsg.text.includes('critique') ||
-                    lastBotMsg.text.includes('SAMU');
-            }
-
-            let dateStr = new Date().toLocaleString('fr-FR');
-            if (conv.updatedAt) {
-                dateStr = new Date(conv.updatedAt).toLocaleString('fr-FR');
-            }
+            let preview = lastBotMsg?.text?.substring(0, 120) || 'En attente de réponse...';
+            let hasUrgency = lastBotMsg?.text?.includes('URGENCE') || false;
 
             return {
                 id: conv._id,
                 sessionId: conv.sessionId,
-                date: dateStr,
+                date: conv.updatedAt ? new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
                 title: title,
                 preview: preview,
-                messageCount: conv.messages ? conv.messages.length : 0,
+                messageCount: conv.messages?.length || 0,
                 urgency: hasUrgency
             };
         });
@@ -272,70 +242,30 @@ const getUserHistory = async(req, res) => {
     }
 };
 
-// Route pour l'historique public (sans authentification)
-const getPublicHistory = async(req, res) => {
+const getPublicHistory = async (req, res) => {
     try {
         const sessionId = req.headers['x-session-id'];
-
-        if (!sessionId) {
-            return res.json([]);
-        }
+        if (!sessionId) return res.json([]);
 
         const conversations = await Conversation.find({
-            $or: [
-                { sessionId: sessionId },
-                { tempUserId: sessionId }
-            ]
+            $or: [{ sessionId: sessionId }, { tempUserId: sessionId }]
         }).sort({ updatedAt: -1 });
 
         const formatted = conversations.map(conv => {
-            let firstUserMsg = null;
-            if (conv.messages) {
-                firstUserMsg = conv.messages.find(m => m.sender === 'user');
-            }
+            const firstUserMsg = conv.messages?.find(m => m.sender === 'user');
+            const lastBotMsg = conv.messages?.filter(m => m.sender === 'bot').pop();
 
-            let lastBotMsg = null;
-            if (conv.messages) {
-                const botMessages = conv.messages.filter(m => m.sender === 'bot');
-                if (botMessages.length > 0) {
-                    lastBotMsg = botMessages[botMessages.length - 1];
-                }
-            }
-
-            let title = conv.title;
-            if (!title || title === 'Consultation médicale') {
-                if (firstUserMsg && firstUserMsg.text) {
-                    title = firstUserMsg.text.substring(0, 50);
-                } else {
-                    title = 'Consultation médicale';
-                }
-            }
-
-            let preview = 'Aucun message';
-            if (lastBotMsg && lastBotMsg.text) {
-                preview = lastBotMsg.text.substring(0, 120);
-            } else if (firstUserMsg && firstUserMsg.text) {
-                preview = firstUserMsg.text.substring(0, 120);
-            }
-
-            let hasUrgency = false;
-            if (lastBotMsg && lastBotMsg.text) {
-                hasUrgency = lastBotMsg.text.includes('URGENCE');
-            }
-
-            let dateStr = new Date().toLocaleString('fr-FR');
-            if (conv.updatedAt) {
-                dateStr = new Date(conv.updatedAt).toLocaleString('fr-FR');
-            }
+            let title = conv.title || firstUserMsg?.text?.substring(0, 50) || 'Consultation médicale';
+            let preview = lastBotMsg?.text?.substring(0, 120) || firstUserMsg?.text?.substring(0, 120) || 'Aucun message';
 
             return {
                 id: conv._id,
                 sessionId: conv.sessionId,
-                date: dateStr,
+                date: conv.updatedAt ? new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
                 title: title,
                 preview: preview,
-                messageCount: conv.messages ? conv.messages.length : 0,
-                urgency: hasUrgency
+                messageCount: conv.messages?.length || 0,
+                urgency: false
             };
         });
 
@@ -346,24 +276,17 @@ const getPublicHistory = async(req, res) => {
     }
 };
 
-// Fonction pour obtenir l'état d'une session (debug)
-const getSessionState = async(req, res) => {
+const getSessionState = async (req, res) => {
     try {
         const { sessionId } = req.params;
         const sessionData = sessions.get(sessionId);
-
-        if (!sessionData) {
-            return res.json({ exists: false, message: 'Session non trouvée' });
-        }
-
+        if (!sessionData) return res.json({ exists: false });
         res.json({
             exists: true,
             summary: sessionData.builder.getSummary(),
-            lastAccess: new Date(sessionData.lastAccess).toISOString(),
-            createdAt: new Date(sessionData.createdAt).toISOString()
+            lastAccess: new Date(sessionData.lastAccess).toISOString()
         });
     } catch (error) {
-        console.error('Erreur:', error);
         res.status(500).json({ error: 'Erreur' });
     }
 };

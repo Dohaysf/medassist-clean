@@ -278,23 +278,46 @@ const PatientChat = () => {
     });
   };
 
-  const resetConversation = useCallback(async () => {
+  // Seulement la partie resetConversation modifiée :
+
+const resetConversation = useCallback(async () => {
+    // ✅ Envoyer resetSession=true au backend pour forcer la suppression
     if (sessionId) {
-      try { await axios.post('http://localhost:5000/api/chat/reset-session', { sessionId }); }
-      catch (err) { console.error(err); }
+        try {
+            await axios.post('http://localhost:5000/api/chat/reset-session', { 
+                sessionId: sessionId,
+                reset: true 
+            });
+            console.log('✅ Session backend réinitialisée');
+        } catch (err) {
+            console.error("Erreur nettoyage session:", err);
+        }
     }
-    const newId = Date.now().toString();
+    
+    // ✅ Vider l'état local
     setMessages([]);
-    setSessionId(newId);
-    localStorage.setItem('currentSessionId', newId);
     setInput('');
-    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    
+    // ✅ Créer un NOUVEL ID de session
+    const newSessionId = Date.now().toString();
+    setSessionId(newSessionId);
+    localStorage.setItem('currentSessionId', newSessionId);
+    
+    // ✅ Annuler toute lecture audio en cours
+    if (window.speechSynthesis) {
+        window.speechSynthesis.cancel();
+    }
+    cancel(); // Fonction de useSpeechSynthesis
+    
+    // ✅ Réinitialiser les refs
     locationSentRef.current = false;
     setLocationSentInThisConversation(false);
     resetError();
     setEmergencyDisabled(false);
-  }, [sessionId, resetError]);
-
+    setPlayingMsgIdx(null);
+    
+    console.log('🔄 Nouvelle conversation créée, ID:', newSessionId);
+}, [sessionId, resetError, cancel]);
   const handleEmergency = useCallback(async () => {
     if (!sessionId) { alert(lang === 'ar' ? 'أرسل رسالة أولاً.' : "Envoyez d'abord un message."); return; }
     const msg = lang === 'ar'

@@ -5,6 +5,7 @@ import axios from 'axios';
 import PublicLayout from '../../../components/LayoutPublic/PublicLayout';
 import useSpeechSynthesis from '../../../hooks/useSpeechSynthesis';
 import useSpeechRecognition from '../../../hooks/useSpeechRecognition';
+import useGeolocation from '../../../hooks/useGeolocation';
 import ReactMarkdown from 'react-markdown';
 import './PublicChatPage.css';
 
@@ -18,6 +19,7 @@ const IconMic = () => (
     <line x1="8" y1="23" x2="16" y2="23" />
   </svg>
 );
+
 const IconSend = () => (
   <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -25,6 +27,7 @@ const IconSend = () => (
     <polygon points="22 2 15 22 11 13 2 9 22 2" />
   </svg>
 );
+
 const IconCamera = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -39,18 +42,13 @@ const I18N = {
     title:       'Consultation médicale',
     badge:       'Assistant IA',
     newBtn:      '+ Nouveau',
-    welcome:     'Bonjour, comment puis-je vous aider ?',
+    welcome:     "Bonjour, je suis l'assistant médical. Décrivez votre situation.",
     welcomeSub:  'Décrivez vos symptômes et je vous fournirai des conseils adaptés.',
     placeholder: 'Décrivez vos symptômes…',
     recording:   'Enregistrement… Parlez maintenant',
     transcribing:'Transcription en cours…',
     hint:        'MedAssist ne remplace pas un avis médical professionnel.',
-    savePrompt:  '💾 Sauvegardez cette conversation dans votre espace patient',
-    login:       'Se connecter',
-    register:    'Créer un compte',
-    save:        '💾 Sauvegarder cette consultation',
-    listen:      'Écouter',
-    stop:        'Arrêter',
+    locationPrompt: 'Partagez votre position pour une intervention plus rapide (optionnel)',
     suggestions: [
       "J'ai de la fièvre depuis hier",
       'Douleur thoracique légère',
@@ -62,18 +60,13 @@ const I18N = {
     title:       'الاستشارة الطبية',
     badge:       'مساعد ذكاء اصطناعي',
     newBtn:      '+ جديد',
-    welcome:     'مرحبًا، كيف يمكنني مساعدتك؟',
+    welcome:     'مرحبًا، أنا المساعد الطبي. يرجى وصف حالتك.',
     welcomeSub:  'صف أعراضك وسأقدم لك النصائح المناسبة.',
     placeholder: 'صف أعراضك…',
     recording:   'جارٍ التسجيل… تحدث الآن',
     transcribing:'جارٍ التحويل…',
     hint:        'لا يُغني MedAssist عن الاستشارة الطبية المتخصصة.',
-    savePrompt:  '💾 احفظ هذه المحادثة في مساحتك',
-    login:       'تسجيل الدخول',
-    register:    'إنشاء حساب',
-    save:        '💾 حفظ هذه الاستشارة',
-    listen:      'استمع',
-    stop:        'إيقاف',
+    locationPrompt: 'شارك موقعك لتدخل أسرع (اختياري)',
     suggestions: [
       'عندي حمى من أمس',
       'ألم خفيف في الصدر',
@@ -86,12 +79,27 @@ const I18N = {
 const nowTime = () =>
   new Date().toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
 
+const formatMessageWithLocation = (content) => {
+  const locationMatch = content.match(/\[localisation: (.*?)\]/);
+  if (locationMatch) {
+    const location = locationMatch[1];
+    const cleanMessage = content.replace(/\[localisation: .*?\]/, '').trim();
+    return (
+      <>
+        <div>{cleanMessage}</div>
+        <div className="message-location-badge">📍 {location}</div>
+      </>
+    );
+  }
+  return <div>{content}</div>;
+};
+
 const PublicChatPage = () => {
   const navigate = useNavigate();
 
   // ── Langue ────────────────────────────────────────────────────────────────
   const [lang, setLang] = useState(() => localStorage.getItem('language') || 'fr');
-  const t    = I18N[lang] || I18N.fr;
+  const t = I18N[lang] || I18N.fr;
   const isRTL = lang === 'ar';
 
   const toggleLang = () => {
@@ -100,21 +108,28 @@ const PublicChatPage = () => {
     localStorage.setItem('language', next);
   };
 
-  const [messages,        setMessages]        = useState([]);
-  const [input,           setInput]           = useState('');
-  const [isTyping,        setIsTyping]        = useState(false);
-  const [sessionId,       setSessionId]       = useState(() => localStorage.getItem('publicSessionId') || null);
+  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem('publicSessionId') || null);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
+  const [emergencyDisabled, setEmergencyDisabled] = useState(false);
+  const [playingMsgIdx, setPlayingMsgIdx] = useState(null);
   const [isAuthenticated, setIsAuthenticated] = useState(!!localStorage.getItem('token'));
-  const [playingMsgIdx,   setPlayingMsgIdx]   = useState(null);
 
   const messagesEndRef = useRef(null);
-  const textareaRef    = useRef(null);
-  const isTypingRef    = useRef(false);
+  const textareaRef = useRef(null);
+  const isTypingRef = useRef(false);
 
-  const { speak, cancel }                                            = useSpeechSynthesis();
+  const { speak, cancel } = useSpeechSynthesis();
   const { transcript, transcriptTs, listening, isLoading: micLoading, toggleListening } = useSpeechRecognition();
+  const { loading: locLoading, error: locError, getLocation, resetError } = useGeolocation();
+
+  const locationSentRef = useRef(false);
+  const [locationSentInThisConversation, setLocationSentInThisConversation] = useState(false);
+  const sessionIdRef = useRef(sessionId);
 
   useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
 
   useEffect(() => {
     const check = () => setIsAuthenticated(!!localStorage.getItem('token'));
@@ -146,10 +161,10 @@ const PublicChatPage = () => {
     window.dispatchEvent(new Event('historyUpdate'));
   };
 
-  // ── Sauvegarde MongoDB ─────────────────────────────────────────────────────
+  // ── Sauvegarde MongoDB (si connecté) ───────────────────────────────────────
   const saveConsultation = useCallback(async () => {
-    if (!sessionId)            { alert('❌ Aucune session en cours'); return; }
-    if (!messages.length)      { alert('❌ Aucune conversation à sauvegarder'); return; }
+    if (!sessionId) { alert('❌ Aucune session en cours'); return; }
+    if (!messages.length) { alert('❌ Aucune conversation à sauvegarder'); return; }
     if (!isAuthenticated) {
       const ok = window.confirm(
         lang === 'ar'
@@ -161,21 +176,19 @@ const PublicChatPage = () => {
     }
     try {
       const token = localStorage.getItem('token');
-      const res = await axios.post(
+      await axios.post(
         'http://localhost:5000/api/chat/save-session',
-        { sessionId, messages: messages.map(m => ({ role: m.role, content: m.content, time: m.time, urgency: m.urgency || false })) },
+        { sessionId, messages: messages.map(m => ({ role: m.role, content: m.content, time: m.time })) },
         { headers: { Authorization: `Bearer ${token}` } }
       );
-      if (res.data.success) {
-        alert(lang === 'ar' ? '✅ تم حفظ الاستشارة!' : '✅ Consultation sauvegardée !');
-        localStorage.removeItem('publicSessionId');
-        localStorage.removeItem('pendingSaveSession');
-        setSessionId(null);
-        navigate('/patient/history');
-      }
+      alert(lang === 'ar' ? '✅ تم حفظ الاستشارة!' : '✅ Consultation sauvegardée !');
+      localStorage.removeItem('publicSessionId');
+      localStorage.removeItem('pendingSaveSession');
+      setSessionId(null);
+      navigate('/patient/history');
     } catch (err) {
       console.error(err);
-      alert('❌ ' + ((err.response && err.response.data && err.response.data.error) ? err.response.data.error : err.message));
+      alert('❌ ' + (err.response?.data?.error || err.message));
     }
   }, [sessionId, messages, isAuthenticated, lang, navigate]);
 
@@ -187,58 +200,108 @@ const PublicChatPage = () => {
     }
   }, [isAuthenticated, saveConsultation]);
 
-  // ── Envoi message ──────────────────────────────────────────────────────────
-  const sendMessage = useCallback(async (text = input) => {
+  // ── Envoi message central ──────────────────────────────────────────────────
+  const sendText = useCallback(async (text) => {
     const trimmed = (text || '').trim();
     if (!trimmed || isTypingRef.current) return;
-
-    let sid = sessionId;
-    if (!sid) {
-      sid = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      setSessionId(sid);
-    }
 
     setMessages(prev => [...prev, { role: 'user', content: trimmed, time: nowTime() }]);
     setInput('');
     if (textareaRef.current) textareaRef.current.style.height = 'auto';
     setIsTyping(true);
 
+    let sid = sessionIdRef.current;
+    if (!sid) {
+      sid = Date.now().toString();
+      setSessionId(sid);
+      sessionIdRef.current = sid;
+      localStorage.setItem('publicSessionId', sid);
+    }
+
     try {
       const res = await axios.post('http://localhost:5000/api/chat', { message: trimmed, sessionId: sid });
-      const reply    = res.data.reply || (lang === 'ar' ? 'جارٍ المعالجة…' : 'Je traite votre demande…');
-      const isUrgent = res.data.urgency === true || res.data.severity === 'critique';
+      const reply = res.data.reply || (lang === 'ar' ? 'جارٍ المعالجة…' : 'Je traite votre demande…');
+      const isUrgent = res.data.severity === 'critique';
       setMessages(prev => [...prev, { role: 'assistant', content: reply, time: nowTime(), urgency: isUrgent }]);
       saveToHistory(trimmed, reply, isUrgent);
-    } catch (err) {
-      console.error(err);
+    } catch (error) {
+      console.error(error);
       setMessages(prev => [...prev, {
         role: 'assistant',
-        content: lang === 'ar' ? '❌ حدث خطأ. يرجى المحاولة مرة أخرى.' : '❌ Une erreur est survenue. Veuillez réessayer.',
-        time: nowTime(),
+        content: lang === 'ar' ? 'حدث خطأ. يرجى المحاولة مرة أخرى.' : 'Une erreur est survenue. Veuillez réessayer.',
+        time: nowTime()
       }]);
     } finally {
       setIsTyping(false);
     }
-  }, [input, sessionId, lang]);
+  }, [lang]);
 
-  // ── Transcript vocal → envoi auto ─────────────────────────────────────────
+  // ── Transcript vocal → envoi auto ──────────────────────────────────────────
   useEffect(() => {
     if (transcript && transcript.trim() && transcriptTs > 0) {
-      sendMessage(transcript);
+      sendText(transcript);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transcriptTs]);
+  }, [transcriptTs, sendText]);
+
+  const handleSendMessage = useCallback(async (text = input) => {
+    await sendText(text);
+  }, [input, sendText]);
 
   // ── Géolocalisation ────────────────────────────────────────────────────────
-  const sendLocation = () => {
-    if (!navigator.geolocation) { alert(lang === 'ar' ? 'الموقع غير مدعوم' : 'Géolocalisation non supportée'); return; }
-    navigator.geolocation.getCurrentPosition(
-      async (pos) => {
-        await sendMessage(`Ma position: latitude ${pos.coords.latitude}, longitude ${pos.coords.longitude}`);
-      },
-      () => alert(lang === 'ar' ? 'تعذر تحديد الموقع' : "Impossible d'accéder à votre position")
-    );
+  const handleLocationClick = () => {
+    resetError();
+    if (!navigator.geolocation) { alert('Géolocalisation non supportée'); return; }
+    
+    const loadingMsgId = Date.now();
+    setMessages(prev => [...prev, {
+      id: loadingMsgId, role: 'system',
+      content: lang === 'ar' ? 'جارٍ تحديد موقعك...' : 'Récupération de votre position...',
+      time: nowTime(), isLocationNotification: true
+    }]);
+    
+    getLocation(async (coords) => {
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
+      const { latitude, longitude, address } = coords;
+      const locationMsg = address 
+        ? `Ma position : ${address}`
+        : `Ma position : latitude ${latitude.toFixed(4)}, longitude ${longitude.toFixed(4)}`;
+      await handleSendMessage(locationMsg);
+      locationSentRef.current = true;
+      setLocationSentInThisConversation(true);
+    }).catch(() => {
+      setMessages(prev => prev.filter(msg => msg.id !== loadingMsgId));
+      setMessages(prev => [...prev, {
+        role: 'system',
+        content: lang === 'ar' ? 'تعذر تحديد الموقع.' : 'Impossible de récupérer votre position.',
+        time: nowTime(), isLocationNotification: true
+      }]);
+    });
   };
+
+  // ── Reset conversation (identique au patient) ───────────────────────────────
+  const resetConversation = useCallback(async () => {
+    if (sessionId) {
+      try {
+        await axios.post('http://localhost:5000/api/chat/reset-session', { sessionId });
+        console.log('✅ Session backend réinitialisée');
+      } catch (err) {
+        console.error("Erreur nettoyage session:", err);
+      }
+    }
+    const newId = Date.now().toString();
+    setMessages([]);
+    setSessionId(newId);
+    localStorage.setItem('publicSessionId', newId);
+    setInput('');
+    if (window.speechSynthesis) window.speechSynthesis.cancel();
+    cancel();
+    locationSentRef.current = false;
+    setLocationSentInThisConversation(false);
+    resetError();
+    setEmergencyDisabled(false);
+    setPlayingMsgIdx(null);
+    console.log('🔄 Nouvelle conversation publique créée, ID:', newId);
+  }, [sessionId, resetError, cancel]);
 
   const handleInputChange = (e) => {
     setInput(e.target.value);
@@ -247,20 +310,30 @@ const PublicChatPage = () => {
   };
 
   const handleKeyDown = (e) => {
-    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
   };
 
-  const resetConversation = () => {
-    const msg = lang === 'ar' ? 'مسح هذه المحادثة؟' : '⚠️ Effacer cette conversation ?';
-    if (messages.length > 0 && window.confirm(msg)) {
-      setMessages([]);
-      cancel();
-      setPlayingMsgIdx(null);
-      const newId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-      setSessionId(newId);
-      localStorage.setItem('publicSessionId', newId);
+  // ── Bouton urgence (identique au patient) ───────────────────────────────────
+  const handleEmergency = useCallback(async () => {
+    if (!sessionId) { alert(lang === 'ar' ? 'أرسل رسالة أولاً.' : "Envoyez d'abord un message."); return; }
+    const msg = lang === 'ar'
+      ? 'هل تؤكد إرسال تنبيه طارئ؟'
+      : "Confirmez-vous l'envoi d'une alerte d'urgence ?";
+    if (!window.confirm(msg)) return;
+    setEmergencyDisabled(true);
+    try {
+      const response = await axios.post('http://localhost:5000/api/chat/emergency-manual', {
+        sessionId, summary: {}
+      });
+      alert(lang === 'ar' ? 'تم إرسال التنبيه.' : 'Alerte envoyée.');
+      setMessages(prev => [...prev, { role: 'assistant', content: response.data.reply, time: nowTime() }]);
+    } catch (err) {
+      console.error(err);
+      alert(lang === 'ar' ? 'خطأ في إرسال التنبيه.' : "Erreur lors de l'envoi de l'alerte.");
+    } finally {
+      setTimeout(() => setEmergencyDisabled(false), 5000);
     }
-  };
+  }, [sessionId, lang]);
 
   return (
     <PublicLayout>
@@ -287,68 +360,83 @@ const PublicChatPage = () => {
               <p>{t.welcomeSub}</p>
               <div className="chat-suggestions">
                 {t.suggestions.map((s) => (
-                  <button key={s} className="suggestion-chip" onClick={() => sendMessage(s)}>{s}</button>
+                  <button key={s} className="suggestion-chip" onClick={() => handleSendMessage(s)}>
+                    {s}
+                  </button>
                 ))}
               </div>
             </div>
           ) : (
             <>
-              {messages.map((msg, i) => (
-                <div key={i} className={`msg-row ${msg.role}`}>
-                  <div className={`msg-avatar ${msg.role}`}>
-                    {msg.role === 'assistant' ? 'M' : '🙂'}
-                  </div>
-                  <div>
-                    <div className={`msg-bubble${isRTL ? ' rtl' : ''}`}>
-                      {msg.role === 'assistant'
-                        ? <ReactMarkdown>{msg.content}</ReactMarkdown>
-                        : msg.content}
-                      {msg.urgency && (
-                        <span className="urgency-badge">
-                          ⚠️ {lang === 'ar' ? 'طارئ' : 'Urgence'}
-                        </span>
-                      )}
+              {messages.map((msg, i) => {
+                if (msg.isLocationNotification) {
+                  return (
+                    <div key={i} className="system-message">
+                      <div className="system-message-content">{msg.content}</div>
                     </div>
-                    <div className={`msg-footer${isRTL ? ' rtl' : ''}`}>
-                      <span className="msg-time">{msg.time}</span>
-                      {msg.role === 'assistant' && (
-                        <button
-                          className={`audio-play-btn${playingMsgIdx === i ? ' playing' : ''}`}
-                          onClick={() => {
-                            if (playingMsgIdx === i) {
-                              cancel();
-                              setPlayingMsgIdx(null);
-                            } else {
-                              cancel();
-                              setPlayingMsgIdx(i);
-                              speak(msg.content);
-                              setTimeout(() => setPlayingMsgIdx(null), Math.min(msg.content.length * 55 + 1500, 30000));
-                            }
-                          }}
-                          title={playingMsgIdx === i ? t.stop : t.listen}
-                        >
-                          {playingMsgIdx === i ? (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                              <rect x="5" y="4" width="4" height="16" rx="1"/>
-                              <rect x="15" y="4" width="4" height="16" rx="1"/>
-                            </svg>
-                          ) : (
-                            <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
-                              <polygon points="5 3 19 12 5 21 5 3"/>
-                            </svg>
-                          )}
-                        </button>
-                      )}
+                  );
+                }
+                return (
+                  <div key={i} className={`msg-row ${msg.role}`}>
+                    <div className={`msg-avatar ${msg.role}`}>
+                      {msg.role === 'assistant' ? 'M' : '🙂'}
+                    </div>
+                    <div>
+                      <div className={`msg-bubble${isRTL ? ' rtl' : ''}`}>
+                        {msg.role === 'assistant' ? (
+                          <ReactMarkdown>{msg.content}</ReactMarkdown>
+                        ) : (
+                          formatMessageWithLocation(msg.content)
+                        )}
+                        {msg.urgency && (
+                          <span className="urgency-badge">
+                            ⚠️ {lang === 'ar' ? 'طارئ' : 'Urgence'}
+                          </span>
+                        )}
+                      </div>
+                      <div className={`msg-footer${isRTL ? ' rtl' : ''}`}>
+                        <span className="msg-time">{msg.time}</span>
+                        {msg.role === 'assistant' && (
+                          <button
+                            className={`audio-play-btn${playingMsgIdx === i ? ' playing' : ''}`}
+                            onClick={() => {
+                              if (playingMsgIdx === i) {
+                                cancel();
+                                setPlayingMsgIdx(null);
+                              } else {
+                                cancel();
+                                setPlayingMsgIdx(i);
+                                speak(msg.content);
+                                setTimeout(() => setPlayingMsgIdx(null), Math.min(msg.content.length * 55 + 1500, 30000));
+                              }
+                            }}
+                            title={playingMsgIdx === i ? (isRTL ? 'إيقاف' : 'Arrêter') : (isRTL ? 'استمع' : 'Écouter')}
+                          >
+                            {playingMsgIdx === i ? (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <rect x="5" y="4" width="4" height="16" rx="1"/>
+                                <rect x="15" y="4" width="4" height="16" rx="1"/>
+                              </svg>
+                            ) : (
+                              <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
+                                <polygon points="5 3 19 12 5 21 5 3"/>
+                              </svg>
+                            )}
+                          </button>
+                        )}
+                      </div>
                     </div>
                   </div>
-                </div>
-              ))}
+                );
+              })}
               {isTyping && (
                 <div className="msg-row assistant">
                   <div className="msg-avatar assistant">M</div>
                   <div className="msg-bubble" style={{ padding: 0 }}>
                     <div className="typing-indicator">
-                      <div className="typing-dot"/><div className="typing-dot"/><div className="typing-dot"/>
+                      <div className="typing-dot" />
+                      <div className="typing-dot" />
+                      <div className="typing-dot" />
                     </div>
                   </div>
                 </div>
@@ -362,7 +450,6 @@ const PublicChatPage = () => {
         <div className="chat-input-area">
           <div className="chat-input-box">
             <button className="input-tool-btn" aria-label="Camera"><IconCamera /></button>
-            <button className="input-tool-btn location-btn" onClick={sendLocation} title="Me localiser">📍</button>
             <textarea
               ref={textareaRef}
               rows={1}
@@ -375,20 +462,34 @@ const PublicChatPage = () => {
             />
             <button
               className={`input-tool-btn mic-btn${listening ? ' mic-active' : ''}${micLoading ? ' mic-loading' : ''}`}
-              title={listening ? t.stop : (isRTL ? 'انقر للإملاء' : 'Cliquez pour dicter')}
+              title={listening ? (isRTL ? 'انقر للإيقاف' : 'Cliquez pour arrêter') : (isRTL ? 'انقر للإملاء' : 'Cliquez pour dicter')}
               onClick={(e) => { e.preventDefault(); toggleListening(); }}
               disabled={isTyping || micLoading}
             >
               <IconMic />
             </button>
-            <button
-              className="input-send-btn"
-              onClick={() => sendMessage()}
-              disabled={!input.trim() || isTyping}
-            >
+            <button className="input-tool-btn location-btn" onClick={handleLocationClick} disabled={locLoading} title="Me localiser">
+              {locLoading ? '⏳' : '📍'}
+            </button>
+            <button className="input-tool-btn emergency-btn" onClick={handleEmergency} disabled={emergencyDisabled} title="Alerte urgence">
+              🚨
+            </button>
+            <button className="input-send-btn" onClick={() => handleSendMessage()} disabled={!input.trim() || isTyping}>
               <IconSend />
             </button>
           </div>
+
+          {!locationSentInThisConversation && !locLoading && !locationSentRef.current && (
+            <div className="location-prompt">{t.locationPrompt}</div>
+          )}
+          {locError && (
+            <div className="location-error">
+              {locError}{' '}
+              <button onClick={() => window.location.reload()}>
+                {isRTL ? 'إعادة تحميل' : 'Recharger'}
+              </button>
+            </div>
+          )}
           <p className="chat-input-hint">{t.hint}</p>
         </div>
 
