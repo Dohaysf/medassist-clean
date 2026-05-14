@@ -2,41 +2,29 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from 'axios';
 import PublicLayout from '../../../components/LayoutPublic/PublicLayout';
+import useTranslation from '../../../hooks/useTranslation';
 import './PublicHistoryPage.css';
 
 const PublicHistoryPage = () => {
   const navigate = useNavigate();
+  const { t } = useTranslation();
+  const T = t('history');
+
   const [conversations, setConversations] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
 
   const loadCurrentSession = async () => {
     setLoading(true);
-    
     try {
-      // Récupérer l'ID de session depuis localStorage
       let sessionId = localStorage.getItem('currentSessionId');
-      
-      console.log('🔑 Session ID:', sessionId);
-      
-      // Si pas de session, en créer une
       if (!sessionId) {
         sessionId = Date.now().toString();
         localStorage.setItem('currentSessionId', sessionId);
       }
-      
-      // Appeler l'API
       const response = await axios.get('http://localhost:5000/api/public/history', {
         headers: { 'X-Session-Id': sessionId }
       });
-      
-      console.log('📊 Réponse:', response.data);
-      
-      if (response.data && response.data.length > 0) {
-        setConversations(response.data);
-      } else {
-        setConversations([]);
-      }
+      setConversations(response.data?.length > 0 ? response.data : []);
     } catch (err) {
       console.error('❌ Erreur:', err);
       setConversations([]);
@@ -45,28 +33,16 @@ const PublicHistoryPage = () => {
     }
   };
 
-  useEffect(() => {
-    loadCurrentSession();
-  }, []);
+  useEffect(() => { loadCurrentSession(); }, []);
 
-  const continueChat = () => {
-    navigate('/public/chat');
-  };
+  const continueChat = () => navigate('/public/chat');
 
   const startNewChat = async () => {
-    // Créer une nouvelle session
     const newSessionId = Date.now().toString();
     localStorage.setItem('currentSessionId', newSessionId);
-    
-    // Option: appeler une API pour reset la session
     try {
-      await axios.post('http://localhost:5000/api/chat/reset-session', { 
-        sessionId: newSessionId 
-      });
-    } catch (err) {
-      console.log('Reset non nécessaire');
-    }
-    
+      await axios.post('http://localhost:5000/api/chat/reset-session', { sessionId: newSessionId });
+    } catch { /* not required */ }
     setConversations([]);
     navigate('/public/chat');
   };
@@ -74,16 +50,14 @@ const PublicHistoryPage = () => {
   const formatDate = (dateStr) => {
     try {
       const date = new Date(dateStr);
-      const now = new Date();
-      const diff = now - date;
+      const diff = Date.now() - date;
       const minutes = Math.floor(diff / 60000);
       const hours = Math.floor(diff / 3600000);
       const days = Math.floor(diff / 86400000);
-      
-      if (minutes < 1) return "À l'instant";
-      if (minutes < 60) return `Il y a ${minutes} min`;
-      if (hours < 24) return `Il y a ${hours} h`;
-      if (days < 7) return `Il y a ${days} j`;
+      if (minutes < 1) return T.justNow;
+      if (minutes < 60) return `${T.minutesAgo} ${minutes} ${T.min}`;
+      if (hours < 24) return `${T.hoursAgo} ${hours} ${T.h}`;
+      if (days < 7) return `${T.daysAgo} ${days} ${T.d}`;
       return date.toLocaleDateString('fr-FR', { day: 'numeric', month: 'short' });
     } catch {
       return dateStr;
@@ -95,10 +69,8 @@ const PublicHistoryPage = () => {
       <PublicLayout>
         <div className="public-history-page">
           <div className="history-loading">
-            <div className="loading-dots">
-              <span></span><span></span><span></span>
-            </div>
-            <p>Chargement...</p>
+            <div className="loading-dots"><span></span><span></span><span></span></div>
+            <p>{T.loading}</p>
           </div>
         </div>
       </PublicLayout>
@@ -111,28 +83,27 @@ const PublicHistoryPage = () => {
         <div className="history-topbar">
           <div className="topbar-left">
             <span className="topbar-icon">🌐</span>
-            <h1>Ma consultation en cours</h1>
+            <h1>{T.title}</h1>
           </div>
           <button className="new-chat-btn" onClick={startNewChat}>
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <line x1="12" y1="5" x2="12" y2="19"/>
-              <line x1="5" y1="12" x2="19" y2="12"/>
+              <line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/>
             </svg>
-            Nouvelle consultation
+            {T.newConsultation}
           </button>
         </div>
 
         {conversations.length === 0 ? (
           <div className="history-empty">
             <div className="empty-icon">💬</div>
-            <h3>Aucune consultation en cours</h3>
-            <p>Commencez une consultation médicale pour voir votre conversation apparaître ici.</p>
+            <h3>{T.noConsultation}</h3>
+            <p>{T.noConsultationDesc}</p>
             <button className="empty-start-btn" onClick={startNewChat}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <line x1="22" y1="2" x2="11" y2="13"/>
                 <polygon points="22 2 15 22 11 13 2 9 22 2"/>
               </svg>
-              Commencer une consultation
+              {T.startConsultation}
             </button>
           </div>
         ) : (
@@ -140,13 +111,13 @@ const PublicHistoryPage = () => {
             <div className="session-info">
               <div className="info-badge">
                 <span className="badge-icon">🟢</span>
-                Session active
+                {T.activeSession}
               </div>
               <button className="refresh-btn" onClick={loadCurrentSession}>
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M23 4v6h-6M1 20v-6h6M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/>
                 </svg>
-                Actualiser
+                {T.refresh}
               </button>
             </div>
 
@@ -156,8 +127,7 @@ const PublicHistoryPage = () => {
                   <div className="card-header">
                     <div className="card-date">
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                        <circle cx="12" cy="12" r="10"/>
-                        <polyline points="12 6 12 12 16 14"/>
+                        <circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/>
                       </svg>
                       {formatDate(item.date)}
                     </div>
@@ -165,37 +135,32 @@ const PublicHistoryPage = () => {
                       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                       </svg>
-                      {item.messageCount} messages
+                      {item.messageCount} {T.messages}
                     </div>
                   </div>
-                  
-                  <div className="card-title">
-                    {item.title}
-                  </div>
-                  
+                  <div className="card-title">{item.title}</div>
                   {item.preview && (
                     <div className="card-preview">
                       {item.preview.length > 150 ? item.preview.substring(0, 150) + '…' : item.preview}
                     </div>
                   )}
-                  
                   <div className="card-footer">
                     <button className="continue-btn" onClick={continueChat}>
                       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                         <polygon points="5 3 19 12 5 21 5 3"/>
                       </svg>
-                      Continuer la consultation
+                      {T.continue}
                     </button>
                   </div>
                 </div>
               ))}
-              
+
               <div className="info-message">
                 <span>💡</span>
                 <p>
-                  Les consultations non connectées sont conservées temporairement. 
-                  <button className="link-btn" onClick={() => navigate('/login')}> Connectez-vous</button> 
-                  pour sauvegarder votre historique.
+                  {T.tip}
+                  <button className="link-btn" onClick={() => navigate('/login')}>{T.login}</button>
+                  {T.tipSuffix}
                 </p>
               </div>
             </div>

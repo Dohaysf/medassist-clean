@@ -16,7 +16,9 @@
     border-right: 1px solid rgba(0, 0, 0, 0.07);
 }
 
+
 /* ===== LOGO / HEADER ===== */
+
 .sidebar-header {
     display: flex;
     align-items: center;
@@ -51,7 +53,9 @@
     color: #1a1915;
 }
 
+
 /* ===== RECHERCHE ===== */
+
 .sidebar-search-wrapper {
     margin: 0 6px 8px 6px;
 }
@@ -164,7 +168,9 @@
     color: #c96a3a;
 }
 
+
 /* ===== NAV ITEMS (liste principale) ===== */
+
 .sidebar-nav {
     padding: 4px 0 0;
     display: flex;
@@ -205,7 +211,9 @@
     font-weight: 500;
 }
 
+
 /* Icône ronde "+" pour Nouvelle consultation */
+
 .nav-plus-icon {
     width: 22px;
     height: 22px;
@@ -220,7 +228,9 @@
     line-height: 1;
 }
 
+
 /* Icônes outline normales */
+
 .nav-icon {
     width: 18px;
     height: 18px;
@@ -237,14 +247,18 @@
     opacity: 1;
 }
 
+
 /* ===== DIVIDER ===== */
+
 .sidebar-divider {
     height: 1px;
     background: rgba(0, 0, 0, 0.08);
     margin: 8px 14px;
 }
 
+
 /* ===== SECTION RÉCENTS ===== */
+
 .sidebar-recents {
     flex: 1;
     display: flex;
@@ -332,14 +346,17 @@
     color: #1a1915;
 }
 
-.recent-loading, .recent-empty {
+.recent-loading,
+.recent-empty {
     padding: 12px 14px;
     font-size: 0.8rem;
     color: rgba(26, 25, 21, 0.45);
     text-align: center;
 }
 
+
 /* ===== PROFIL (bas) ===== */
+
 .sidebar-footer {
     padding: 10px 10px 16px;
     border-top: 1px solid rgba(0, 0, 0, 0.07);
@@ -428,7 +445,9 @@
     border: 1.5px solid #eeebe3;
 }
 
+
 /* Auth buttons (non connecté) */
+
 .auth-section {
     padding: 10px 10px 16px;
     border-top: 1px solid rgba(0, 0, 0, 0.07);
@@ -458,6 +477,17 @@
 .auth-btn:hover {
     background: rgba(0, 0, 0, 0.06);
     color: #1a1915;
+}
+
+.login-warning {
+    margin-top: 8px;
+    padding: 8px 10px;
+    background: #fff3cd;
+    color: #856404;
+    border: 1px solid #ffeeba;
+    border-radius: 6px;
+    font-size: 13px;
+    text-align: center;
 }
 
 .auth-btn svg {

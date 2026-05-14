@@ -1,9 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import PublicLayout from '../../../components/LayoutPublic/PublicLayout';
+import useTranslation from '../../../hooks/useTranslation';
 import './PublicSettingsPage.css';
 
 const PublicSettingsPage = () => {
-  // État pour les paramètres
+  const { language, t } = useTranslation();
+  const T = t('settings');
+
   const [settings, setSettings] = useState({
     language: 'fr',
     theme: 'light',
@@ -18,11 +21,13 @@ const PublicSettingsPage = () => {
   const [loading, setLoading] = useState(false);
   const [notificationPermission, setNotificationPermission] = useState('default');
 
-  // Charger les paramètres sauvegardés
   useEffect(() => {
     loadSettings();
     checkNotificationPermission();
   }, []);
+
+  // Re-render when language changes (hook already handles state update)
+  useEffect(() => {}, [language]);
 
   const loadSettings = () => {
     const savedSettings = localStorage.getItem('medassist_settings');
@@ -42,19 +47,12 @@ const PublicSettingsPage = () => {
     }
   };
 
-  // Sauvegarder les paramètres
   const saveSettings = () => {
     setLoading(true);
     localStorage.setItem('medassist_settings', JSON.stringify(settings));
-    
-    // Appliquer tous les paramètres
     applyAllSettings();
-    
     setTimeout(() => {
-      setSaveStatus({ 
-        message: '✅ Paramètres sauvegardés avec succès !', 
-        type: 'success' 
-      });
+      setSaveStatus({ message: T.savedSuccess, type: 'success' });
       setLoading(false);
       setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
     }, 300);
@@ -69,12 +67,9 @@ const PublicSettingsPage = () => {
     applyReadingMode(settings.readingMode);
   };
 
-  // Application des paramètres
   const applyLanguage = (lang) => {
     localStorage.setItem('language', lang);
-    document.documentElement.lang = lang === 'ar' ? 'ar' : 'fr';
-    
-    // Appliquer la direction RTL pour l'arabe
+    document.documentElement.lang = lang;
     if (lang === 'ar') {
       document.body.style.direction = 'rtl';
       document.body.classList.add('rtl-mode');
@@ -82,22 +77,18 @@ const PublicSettingsPage = () => {
       document.body.style.direction = 'ltr';
       document.body.classList.remove('rtl-mode');
     }
-    
     window.dispatchEvent(new CustomEvent('languageChange', { detail: { language: lang } }));
   };
 
   const applyTheme = (theme) => {
+    document.body.classList.remove('dark-mode', 'light-mode', 'auto-mode');
     if (theme === 'dark') {
       document.body.classList.add('dark-mode');
-      document.body.classList.remove('light-mode', 'auto-mode');
     } else if (theme === 'light') {
       document.body.classList.add('light-mode');
-      document.body.classList.remove('dark-mode', 'auto-mode');
     } else {
       document.body.classList.add('auto-mode');
-      document.body.classList.remove('dark-mode', 'light-mode');
-      const prefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-      if (prefersDark) {
+      if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.body.classList.add('dark-mode');
       } else {
         document.body.classList.add('light-mode');
@@ -132,19 +123,12 @@ const PublicSettingsPage = () => {
   };
 
   const applyReadingMode = (reading) => {
-    if (reading) {
-      document.body.classList.add('reading-mode');
-    } else {
-      document.body.classList.remove('reading-mode');
-    }
+    document.body.classList.toggle('reading-mode', reading);
   };
 
-  // Mettre à jour un paramètre
   const updateSetting = (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
-    
-    // Application immédiate
     if (key === 'language') applyLanguage(value);
     if (key === 'theme') applyTheme(value);
     if (key === 'fontSize') applyFontSize(value);
@@ -154,31 +138,22 @@ const PublicSettingsPage = () => {
     if (key === 'notifications') requestNotificationPermission(value);
   };
 
-  // Demander permission notification
   const requestNotificationPermission = async (enabled) => {
-    if (!enabled) return;
-    
-    if ('Notification' in window) {
-      if (Notification.permission === 'default') {
-        const permission = await Notification.requestPermission();
-        setNotificationPermission(permission);
-        if (permission === 'granted') {
-          showTestNotification();
-        }
-      } else if (Notification.permission === 'granted') {
-        showTestNotification();
-      }
+    if (!enabled || !('Notification' in window)) return;
+    if (Notification.permission === 'default') {
+      const permission = await Notification.requestPermission();
+      setNotificationPermission(permission);
+      if (permission === 'granted') showTestNotification();
+    } else if (Notification.permission === 'granted') {
+      showTestNotification();
     }
   };
 
   const showTestNotification = () => {
     if (Notification.permission === 'granted') {
       new Notification('🔔 MedAssist', {
-        body: 'Les notifications sont activées ! Vous recevrez les alertes importantes.',
+        body: T.notifGranted,
         icon: '/favicon.ico',
-        badge: '/favicon.ico',
-        vibrate: [200, 100, 200],
-        silent: false
       });
     }
   };
@@ -186,66 +161,49 @@ const PublicSettingsPage = () => {
   const testNotification = () => {
     if (Notification.permission === 'granted') {
       showTestNotification();
-      setSaveStatus({ message: '🔔 Notification envoyée !', type: 'info' });
+      setSaveStatus({ message: T.notifSent, type: 'info' });
       setTimeout(() => setSaveStatus({ message: '', type: '' }), 2000);
     } else if (Notification.permission === 'default') {
-      Notification.requestPermission().then(permission => {
-        if (permission === 'granted') {
-          showTestNotification();
-        }
+      Notification.requestPermission().then(p => {
+        if (p === 'granted') showTestNotification();
       });
     } else {
-      setSaveStatus({ message: '❌ Notifications bloquées. Activez-les dans les paramètres de votre navigateur.', type: 'error' });
+      setSaveStatus({ message: T.notifBlocked, type: 'error' });
       setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
     }
   };
 
-  // Réinitialiser les paramètres
   const handleReset = () => {
     const defaultSettings = {
-      language: 'fr',
-      theme: 'light',
-      notifications: true,
-      reducedAnimations: false,
-      compactMode: false,
-      fontSize: 'medium',
-      readingMode: false,
+      language: 'fr', theme: 'light', notifications: true,
+      reducedAnimations: false, compactMode: false, fontSize: 'medium', readingMode: false,
     };
     setSettings(defaultSettings);
     localStorage.setItem('medassist_settings', JSON.stringify(defaultSettings));
-    
-    // Appliquer les valeurs par défaut
     applyLanguage('fr');
     applyTheme('light');
     applyFontSize('medium');
     applyReducedAnimations(false);
     applyCompactMode(false);
     applyReadingMode(false);
-    
-    setSaveStatus({ message: '🔄 Paramètres réinitialisés aux valeurs par défaut', type: 'info' });
+    setSaveStatus({ message: T.resetSuccess, type: 'info' });
     setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
   };
 
-  // Exporter les paramètres
   const exportSettings = () => {
     const dataStr = JSON.stringify(settings, null, 2);
-    const dataUri = 'data:application/json;charset=utf-8,'+ encodeURIComponent(dataStr);
-    const exportFileDefaultName = 'medassist_settings.json';
-    
-    const linkElement = document.createElement('a');
-    linkElement.setAttribute('href', dataUri);
-    linkElement.setAttribute('download', exportFileDefaultName);
-    linkElement.click();
-    
-    setSaveStatus({ message: '📥 Paramètres exportés avec succès', type: 'success' });
+    const dataUri = 'data:application/json;charset=utf-8,' + encodeURIComponent(dataStr);
+    const link = document.createElement('a');
+    link.setAttribute('href', dataUri);
+    link.setAttribute('download', 'medassist_settings.json');
+    link.click();
+    setSaveStatus({ message: T.exportSuccess, type: 'success' });
     setTimeout(() => setSaveStatus({ message: '', type: '' }), 2000);
   };
 
-  // Importer les paramètres
   const importSettings = (event) => {
     const file = event.target.files[0];
     if (!file) return;
-    
     const reader = new FileReader();
     reader.onload = (e) => {
       try {
@@ -254,13 +212,11 @@ const PublicSettingsPage = () => {
         setSettings(newSettings);
         localStorage.setItem('medassist_settings', JSON.stringify(newSettings));
         applyAllSettings();
-        
-        setSaveStatus({ message: '📤 Paramètres importés avec succès', type: 'success' });
-        setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
-      } catch (err) {
-        setSaveStatus({ message: '❌ Fichier invalide', type: 'error' });
-        setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
+        setSaveStatus({ message: T.importSuccess, type: 'success' });
+      } catch {
+        setSaveStatus({ message: T.importError, type: 'error' });
       }
+      setTimeout(() => setSaveStatus({ message: '', type: '' }), 3000);
     };
     reader.readAsText(file);
     event.target.value = '';
@@ -271,18 +227,19 @@ const PublicSettingsPage = () => {
       <div className="settings-page">
         <div className="settings-header">
           <div className="header-icon">⚙️</div>
-          <h1>Paramètres</h1>
-          <p>Personnalisez votre expérience MedAssist</p>
+          <h1>{T.title}</h1>
+          <p>{T.subtitle}</p>
         </div>
 
         <div className="settings-container">
           <div className="settings-card">
-            {/* Section Langue */}
+
+            {/* Langue */}
             <div className="settings-section">
               <div className="section-icon">🌐</div>
               <div className="section-content">
-                <h3>Langue d'affichage</h3>
-                <p>Choisissez votre langue préférée pour l'interface</p>
+                <h3>{T.language}</h3>
+                <p>{T.languageDesc}</p>
                 <div className="settings-options">
                   {[
                     { value: 'fr', label: 'Français', flag: '🇫🇷' },
@@ -302,17 +259,17 @@ const PublicSettingsPage = () => {
               </div>
             </div>
 
-            {/* Section Thème */}
+            {/* Thème */}
             <div className="settings-section">
               <div className="section-icon">🎨</div>
               <div className="section-content">
-                <h3>Apparence</h3>
-                <p>Personnalisez le thème de l'application</p>
+                <h3>{T.appearance}</h3>
+                <p>{T.appearanceDesc}</p>
                 <div className="settings-options">
                   {[
-                    { value: 'light', label: 'Clair', icon: '☀️' },
-                    { value: 'dark', label: 'Sombre', icon: '🌙' },
-                    { value: 'auto', label: 'Auto (système)', icon: '🔄' }
+                    { value: 'light', label: T.themes.light, icon: '☀️' },
+                    { value: 'dark', label: T.themes.dark, icon: '🌙' },
+                    { value: 'auto', label: T.themes.auto, icon: '🔄' }
                   ].map(theme => (
                     <button
                       key={theme.value}
@@ -327,27 +284,25 @@ const PublicSettingsPage = () => {
               </div>
             </div>
 
-            {/* Section Taille de texte */}
+            {/* Taille texte */}
             <div className="settings-section">
               <div className="section-icon">🔤</div>
               <div className="section-content">
-                <h3>Taille du texte</h3>
-                <p>Ajustez pour une meilleure lisibilité</p>
+                <h3>{T.fontSize}</h3>
+                <p>{T.fontSizeDesc}</p>
                 <div className="settings-options">
                   {[
-                    { value: 'small', label: 'Petit', example: 'A' },
-                    { value: 'medium', label: 'Moyen', example: 'A' },
-                    { value: 'large', label: 'Grand', example: 'A' },
-                    { value: 'xlarge', label: 'Très grand', example: 'A' }
+                    { value: 'small', label: T.fontSizes.small, px: '12px' },
+                    { value: 'medium', label: T.fontSizes.medium, px: '16px' },
+                    { value: 'large', label: T.fontSizes.large, px: '20px' },
+                    { value: 'xlarge', label: T.fontSizes.xlarge, px: '24px' }
                   ].map(size => (
                     <button
                       key={size.value}
                       className={`option-btn ${settings.fontSize === size.value ? 'active' : ''}`}
                       onClick={() => updateSetting('fontSize', size.value)}
                     >
-                      <span style={{ fontSize: size.value === 'small' ? '12px' : size.value === 'medium' ? '16px' : size.value === 'large' ? '20px' : '24px' }}>
-                        {size.example}
-                      </span>
+                      <span style={{ fontSize: size.px }}>A</span>
                       <span>{size.label}</span>
                     </button>
                   ))}
@@ -355,76 +310,50 @@ const PublicSettingsPage = () => {
               </div>
             </div>
 
-            {/* Section Préférences d'affichage */}
+            {/* Préférences d'affichage */}
             <div className="settings-section">
               <div className="section-icon">🖥️</div>
               <div className="section-content">
-                <h3>Préférences d'affichage</h3>
-                <p>Optimisez l'interface selon vos besoins</p>
-                
+                <h3>{T.displayPrefs}</h3>
+                <p>{T.displayPrefsDesc}</p>
                 <div className="toggle-group">
-                  <label className="toggle-label">
-                    <div className="toggle-info">
-                      <span>🎬 Réduire les animations</span>
-                      <small>Utile pour économiser la batterie ou réduire les mouvements</small>
-                    </div>
-                    <div className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings.reducedAnimations}
-                        onChange={(e) => updateSetting('reducedAnimations', e.target.checked)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </div>
-                  </label>
-
-                  <label className="toggle-label">
-                    <div className="toggle-info">
-                      <span>📦 Mode compact</span>
-                      <small>Afficher plus de contenu à l'écran</small>
-                    </div>
-                    <div className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings.compactMode}
-                        onChange={(e) => updateSetting('compactMode', e.target.checked)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </div>
-                  </label>
-
-                  <label className="toggle-label">
-                    <div className="toggle-info">
-                      <span>📖 Mode lecture</span>
-                      <small>Optimisation pour la lecture prolongée</small>
-                    </div>
-                    <div className="toggle">
-                      <input
-                        type="checkbox"
-                        checked={settings.readingMode}
-                        onChange={(e) => updateSetting('readingMode', e.target.checked)}
-                      />
-                      <span className="toggle-slider"></span>
-                    </div>
-                  </label>
+                  {[
+                    { key: 'reducedAnimations', icon: '🎬', label: T.reduceAnimations, desc: T.reduceAnimationsDesc },
+                    { key: 'compactMode', icon: '📦', label: T.compactMode, desc: T.compactModeDesc },
+                    { key: 'readingMode', icon: '📖', label: T.readingMode, desc: T.readingModeDesc },
+                  ].map(({ key, icon, label, desc }) => (
+                    <label className="toggle-label" key={key}>
+                      <div className="toggle-info">
+                        <span>{icon} {label}</span>
+                        <small>{desc}</small>
+                      </div>
+                      <div className="toggle">
+                        <input
+                          type="checkbox"
+                          checked={settings[key]}
+                          onChange={(e) => updateSetting(key, e.target.checked)}
+                        />
+                        <span className="toggle-slider"></span>
+                      </div>
+                    </label>
+                  ))}
                 </div>
               </div>
             </div>
 
-            {/* Section Notifications */}
+            {/* Notifications */}
             <div className="settings-section">
               <div className="section-icon">🔔</div>
               <div className="section-content">
-                <h3>Notifications</h3>
-                <p>Recevez des alertes importantes</p>
-                
+                <h3>{T.notifications}</h3>
+                <p>{T.notificationsDesc}</p>
                 <label className="toggle-label">
                   <div className="toggle-info">
-                    <span>Activer les notifications</span>
+                    <span>{T.enableNotifications}</span>
                     <small>
-                      {notificationPermission === 'granted' && '✓ Notifications autorisées'}
-                      {notificationPermission === 'denied' && '⚠️ Notifications bloquées par le navigateur'}
-                      {notificationPermission === 'default' && 'Activez pour recevoir des alertes'}
+                      {notificationPermission === 'granted' && T.notifGranted}
+                      {notificationPermission === 'denied' && T.notifDenied}
+                      {notificationPermission === 'default' && T.notifDefault}
                     </small>
                   </div>
                   <div className="toggle">
@@ -436,74 +365,48 @@ const PublicSettingsPage = () => {
                     <span className="toggle-slider"></span>
                   </div>
                 </label>
-                
                 {settings.notifications && notificationPermission !== 'denied' && (
                   <button className="test-notif-btn" onClick={testNotification}>
-                    🔔 Tester la notification
+                    {T.testNotif}
                   </button>
                 )}
-                
                 {notificationPermission === 'denied' && (
-                  <div className="notification-warning">
-                    ⚠️ Les notifications sont bloquées. Activez-les dans les paramètres de votre navigateur.
-                  </div>
+                  <div className="notification-warning">{T.notifWarning}</div>
                 )}
               </div>
             </div>
 
-            {/* Section Actions */}
+            {/* Actions */}
             <div className="settings-actions">
               <button className="btn-save" onClick={saveSettings} disabled={loading}>
-                {loading ? '⏳ Sauvegarde...' : '💾 Sauvegarder'}
+                {loading ? T.saving : T.save}
               </button>
-              <button className="btn-reset" onClick={handleReset}>
-                🔄 Réinitialiser
-              </button>
-              <button className="btn-export" onClick={exportSettings}>
-                📥 Exporter
-              </button>
+              <button className="btn-reset" onClick={handleReset}>{T.reset}</button>
+              <button className="btn-export" onClick={exportSettings}>{T.export}</button>
               <label className="btn-import">
-                📤 Importer
-                <input
-                  type="file"
-                  accept=".json"
-                  onChange={importSettings}
-                  style={{ display: 'none' }}
-                />
+                {T.import}
+                <input type="file" accept=".json" onChange={importSettings} style={{ display: 'none' }} />
               </label>
             </div>
 
             {saveStatus.message && (
-              <div className={`save-status ${saveStatus.type}`}>
-                {saveStatus.message}
-              </div>
+              <div className={`save-status ${saveStatus.type}`}>{saveStatus.message}</div>
             )}
           </div>
         </div>
 
-        {/* Section Informations */}
+        {/* Infos */}
         <div className="settings-info">
-          <div className="info-card">
-            <span>💾</span>
-            <div>
-              <strong>Sauvegarde locale</strong>
-              <p>Vos paramètres sont stockés sur votre navigateur uniquement</p>
+          {[
+            { icon: '💾', title: T.localSave, desc: T.localSaveDesc },
+            { icon: '🔄', title: T.sync, desc: T.syncDesc },
+            { icon: '🛡️', title: T.privacy, desc: T.privacyDesc },
+          ].map(({ icon, title, desc }) => (
+            <div className="info-card" key={title}>
+              <span>{icon}</span>
+              <div><strong>{title}</strong><p>{desc}</p></div>
             </div>
-          </div>
-          <div className="info-card">
-            <span>🔄</span>
-            <div>
-              <strong>Synchronisation</strong>
-              <p>Les paramètres sont liés à ce navigateur uniquement</p>
-            </div>
-          </div>
-          <div className="info-card">
-            <span>🛡️</span>
-            <div>
-              <strong>Confidentialité</strong>
-              <p>Aucune donnée n'est envoyée à nos serveurs</p>
-            </div>
-          </div>
+          ))}
         </div>
       </div>
     </PublicLayout>
