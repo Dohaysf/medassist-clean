@@ -8,16 +8,13 @@ const PatientLayout = ({ children }) => {
         document.body.className = theme === 'dark' ? 'dark-theme' : 'light-theme';
     }, []);
 
-    return ( <
-        div className = "Patient-layout" >
-        <
-        PatientSidebar / >
-        <
-        div className = "Patient-main-content" >
-        <
-        div className = "Patient-page-container" > { children } < /div> < /
-        div > <
-        /div>
+    return (
+        <div className="Patient-layout">
+            <PatientSidebar />
+            <div className="Patient-main-content">
+                {children}
+            </div>
+        </div>
     );
 };
 

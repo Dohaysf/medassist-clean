@@ -1,5 +1,7 @@
-import { useState } from 'react';
+// frontend/src/components/LayoutPublic/PublicSidebar.jsx
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
+import axios from 'axios';
 import {
   FaHome,
   FaComments,
@@ -9,7 +11,6 @@ import {
   FaHistory,
   FaBookmark,
   FaCog,
-  FaEllipsisH,
 } from 'react-icons/fa';
 import './PublicSidebar.css';
 
@@ -118,25 +119,145 @@ const IconChevron = () => (
   </svg>
 );
 
-/* ── Récents simulés (à remplacer par vos données réelles) ── */
-const RECENT_ITEMS = [
-  { id: 1, label: 'Consultation fièvre et maux de tête', active: true },
-  { id: 2, label: 'Douleur thoracique légère' },
-  { id: 3, label: 'Allergie aux arachides — conseils' },
-  { id: 4, label: 'Blessure au genou sport' },
-];
+const IconClose = () => (
+  <svg width="14" height="14" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <line x1="18" y1="6" x2="6" y2="18"/>
+    <line x1="6" y1="6" x2="18" y2="18"/>
+  </svg>
+);
 
 /* ═══════════════════════════════════════ */
 const PublicSidebar = () => {
   const navigate = useNavigate();
   const isAuthenticated = !!localStorage.getItem('token');
-  const userName = localStorage.getItem('userName') || 'Utilisateur';
+  const [userName, setUserName] = useState('Utilisateur');
+  const [recentConversations, setRecentConversations] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showSearch, setShowSearch] = useState(false);
+  const [loading, setLoading] = useState(true);
+
+  // Charger les conversations récentes
+  const loadRecentConversations = async () => {
+    setLoading(true);
+    try {
+      let conversations = [];
+      
+      if (isAuthenticated) {
+        const token = localStorage.getItem('token');
+        const response = await axios.get('http://localhost:5000/api/chat/history', {
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        
+        conversations = response.data.map(conv => ({
+          id: conv.sessionId,
+          title: conv.title || 'Consultation médicale',
+          date: conv.date,
+          preview: conv.preview,
+          messageCount: conv.messageCount,
+          updatedAt: conv.date
+        }));
+      } else {
+        const stored = localStorage.getItem('publicConversations');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          conversations = parsed.map(conv => ({
+            id: conv.sessionId,
+            title: conv.title || 'Consultation médicale',
+            date: conv.createdAt ? new Date(conv.createdAt).toLocaleDateString('fr-FR') : new Date().toLocaleDateString('fr-FR'),
+            preview: conv.messages[0]?.user?.substring(0, 100) || 'Aucun message',
+            messageCount: conv.messageCount || conv.messages.length,
+            updatedAt: conv.updatedAt
+          }));
+        }
+        
+        const currentSessionId = localStorage.getItem('publicSessionId');
+        if (currentSessionId && !conversations.some(c => c.id === currentSessionId)) {
+          conversations.unshift({
+            id: currentSessionId,
+            title: 'Consultation en cours',
+            date: new Date().toLocaleDateString('fr-FR'),
+            preview: 'Discussion en cours...',
+            messageCount: 0
+          });
+        }
+      }
+      
+      conversations.sort((a, b) => {
+        const dateA = a.updatedAt ? new Date(a.updatedAt) : new Date(a.date);
+        const dateB = b.updatedAt ? new Date(b.updatedAt) : new Date(b.date);
+        return dateB - dateA;
+      });
+      
+      setRecentConversations(conversations.slice(0, 8));
+    } catch (error) {
+      console.error('Erreur chargement conversations:', error);
+      setRecentConversations([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    loadRecentConversations();
+    
+    const handleUpdate = () => {
+      loadRecentConversations();
+    };
+    
+    window.addEventListener('conversationsUpdate', handleUpdate);
+    window.addEventListener('historyUpdate', handleUpdate);
+    window.addEventListener('storage', handleUpdate);
+    
+    return () => {
+      window.removeEventListener('conversationsUpdate', handleUpdate);
+      window.removeEventListener('historyUpdate', handleUpdate);
+      window.removeEventListener('storage', handleUpdate);
+    };
+  }, [isAuthenticated]);
+
+  // Charger les infos utilisateur
+  useEffect(() => {
+    if (isAuthenticated) {
+      const token = localStorage.getItem('token');
+      axios.get('http://localhost:5000/api/auth/me', {
+        headers: { Authorization: `Bearer ${token}` }
+      }).then(res => {
+        if (res.data.name) {
+          setUserName(res.data.name);
+          localStorage.setItem('userName', res.data.name);
+        }
+      }).catch(() => {});
+    } else {
+      const storedName = localStorage.getItem('userName');
+      if (storedName) setUserName(storedName);
+    }
+  }, [isAuthenticated]);
+
+  // Charger une conversation
+  const loadConversation = (conversationId) => {
+    if (isAuthenticated) {
+      localStorage.setItem('currentSessionId', conversationId);
+      navigate('/patient/chat');
+    } else {
+      localStorage.setItem('publicSessionId', conversationId);
+      navigate('/public/chat');
+    }
+    window.location.reload();
+  };
+
+  // Filtrer les conversations
+  const filteredConversations = recentConversations.filter(conv =>
+    conv.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    conv.preview?.toLowerCase().includes(searchQuery.toLowerCase())
+  );
+
   const userInitial = userName.charAt(0).toUpperCase();
 
   return (
     <aside className="public-sidebar">
 
-      {/* ── HEADER ── */}
+      {/* HEADER */}
       <div className="sidebar-header">
         <span className="sidebar-logo-title">MedAssist</span>
         <button className="sidebar-collapse-btn" aria-label="Réduire">
@@ -144,33 +265,54 @@ const PublicSidebar = () => {
         </button>
       </div>
 
-      {/* ── NAVIGATION PRINCIPALE ── */}
+      {/* NAVIGATION PRINCIPALE */}
       <nav className="sidebar-nav">
 
-        {/* Nouvelle consultation — bouton "+" rond */}
-        <button className="sidebar-nav-btn" onClick={() => navigate('/public/chat')}>
+        <button className="sidebar-nav-btn" onClick={() => navigate(isAuthenticated ? '/patient/chat' : '/public/chat')}>
           <span className="nav-plus-icon">+</span>
           <span>Nouvelle consultation</span>
         </button>
 
-        {/* Rechercher */}
-        <button className="sidebar-nav-btn">
-          <span className="nav-icon"><IconSearch /></span>
-          <span>Rechercher</span>
-        </button>
+        {/* Recherche */}
+        <div className="sidebar-search-wrapper">
+          {showSearch ? (
+            <div className="sidebar-search-active">
+              <span className="search-icon"><IconSearch /></span>
+              <input
+                type="text"
+                placeholder="Rechercher une consultation..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                autoFocus
+                className="sidebar-search-input"
+              />
+              <button className="search-close-btn" onClick={() => {
+                setShowSearch(false);
+                setSearchQuery('');
+              }}>
+                <IconClose />
+              </button>
+            </div>
+          ) : (
+            <button className="search-trigger-btn" onClick={() => setShowSearch(true)}>
+              <span className="nav-icon"><IconSearch /></span>
+              <span>Rechercher</span>
+            </button>
+          )}
+        </div>
 
-        {/* Liens principaux — ajoutez vos routes ici */}
+        {/* Liens principaux */}
         <NavLink to="/" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconHome /></span>
           <span>Accueil</span>
         </NavLink>
 
-        <NavLink to="/public/chat" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to={isAuthenticated ? "/patient/chat" : "/public/chat"} className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconChat /></span>
           <span>Chat médical</span>
         </NavLink>
 
-        <NavLink to="/public/history" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to={isAuthenticated ? "/patient/history" : "/public/history"} className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconHistory /></span>
           <span>Historique</span>
         </NavLink>
@@ -194,25 +336,43 @@ const PublicSidebar = () => {
 
       <div className="sidebar-divider" />
 
-      {/* ── RÉCENTS ── */}
+      {/* RÉCENTS */}
       <div className="sidebar-recents">
         <span className="sidebar-section-label">Récents</span>
         <div className="recent-list">
-          {RECENT_ITEMS.map((item) => (
-            <div
-              key={item.id}
-              className={`recent-item${item.active ? ' active-recent' : ''}`}
-            >
-              <span className="recent-item-text">{item.label}</span>
-              <button className="recent-menu-btn" aria-label="Options">
-                <IconDots />
-              </button>
+          {loading ? (
+            <div className="recent-loading">
+              <span>Chargement...</span>
             </div>
-          ))}
+          ) : filteredConversations.length === 0 ? (
+            <div className="recent-empty">
+              <span>{searchQuery ? 'Aucun résultat' : 'Aucune consultation récente'}</span>
+            </div>
+          ) : (
+            filteredConversations.map((conv) => (
+              <div
+                key={conv.id}
+                className="recent-item"
+                onClick={() => loadConversation(conv.id)}
+              >
+                <div className="recent-item-content">
+                  <span className="recent-item-text">{conv.title}</span>
+                  {conv.date && (
+                    <span className="recent-item-date">
+                      {conv.date.includes('Invalid') ? new Date().toLocaleDateString('fr-FR') : conv.date}
+                    </span>
+                  )}
+                </div>
+                <button className="recent-menu-btn" aria-label="Options" onClick={(e) => e.stopPropagation()}>
+                  <IconDots />
+                </button>
+              </div>
+            ))
+          )}
         </div>
       </div>
 
-      {/* ── FOOTER : AUTH ou PROFIL ── */}
+      {/* FOOTER */}
       {!isAuthenticated ? (
         <div className="auth-section">
           <button onClick={() => navigate('/login')} className="auth-btn">
@@ -230,7 +390,7 @@ const PublicSidebar = () => {
             <div className="profile-avatar">{userInitial}</div>
             <div className="profile-info">
               <div className="profile-name">{userName}</div>
-              <div className="profile-plan">Forfait Free</div>
+              <div className="profile-plan">Patient</div>
             </div>
             <div className="profile-actions">
               <button className="profile-action-btn" aria-label="Télécharger">

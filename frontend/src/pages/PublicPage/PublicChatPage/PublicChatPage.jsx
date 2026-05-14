@@ -9,7 +9,7 @@ import useGeolocation from '../../../hooks/useGeolocation';
 import ReactMarkdown from 'react-markdown';
 import './PublicChatPage.css';
 
-// ── Icônes ────────────────────────────────────────────────────────────────────
+// Icônes
 const IconMic = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -36,18 +36,18 @@ const IconCamera = () => (
   </svg>
 );
 
-// ── Contenu multilingue ───────────────────────────────────────────────────────
+// Contenu multilingue
 const I18N = {
   fr: {
-    title:       'Consultation médicale',
-    badge:       'Assistant IA',
-    newBtn:      '+ Nouveau',
-    welcome:     "Bonjour, je suis l'assistant médical. Décrivez votre situation.",
-    welcomeSub:  'Décrivez vos symptômes et je vous fournirai des conseils adaptés.',
+    title: 'Consultation médicale',
+    badge: 'Assistant IA',
+    newBtn: '+ Nouveau',
+    welcome: "Bonjour, je suis l'assistant médical. Décrivez votre situation.",
+    welcomeSub: 'Décrivez vos symptômes et je vous fournirai des conseils adaptés.',
     placeholder: 'Décrivez vos symptômes…',
-    recording:   'Enregistrement… Parlez maintenant',
-    transcribing:'Transcription en cours…',
-    hint:        'MedAssist ne remplace pas un avis médical professionnel.',
+    recording: 'Enregistrement… Parlez maintenant',
+    transcribing: 'Transcription en cours…',
+    hint: 'MedAssist ne remplace pas un avis médical professionnel.',
     locationPrompt: 'Partagez votre position pour une intervention plus rapide (optionnel)',
     suggestions: [
       "J'ai de la fièvre depuis hier",
@@ -57,15 +57,15 @@ const I18N = {
     ],
   },
   ar: {
-    title:       'الاستشارة الطبية',
-    badge:       'مساعد ذكاء اصطناعي',
-    newBtn:      '+ جديد',
-    welcome:     'مرحبًا، أنا المساعد الطبي. يرجى وصف حالتك.',
-    welcomeSub:  'صف أعراضك وسأقدم لك النصائح المناسبة.',
+    title: 'الاستشارة الطبية',
+    badge: 'مساعد ذكاء اصطناعي',
+    newBtn: '+ جديد',
+    welcome: 'مرحبًا، أنا المساعد الطبي. يرجى وصف حالتك.',
+    welcomeSub: 'صف أعراضك وسأقدم لك النصائح المناسبة.',
     placeholder: 'صف أعراضك…',
-    recording:   'جارٍ التسجيل… تحدث الآن',
-    transcribing:'جارٍ التحويل…',
-    hint:        'لا يُغني MedAssist عن الاستشارة الطبية المتخصصة.',
+    recording: 'جارٍ التسجيل… تحدث الآن',
+    transcribing: 'جارٍ التحويل…',
+    hint: 'لا يُغني MedAssist عن الاستشارة الطبية المتخصصة.',
     locationPrompt: 'شارك موقعك لتدخل أسرع (اختياري)',
     suggestions: [
       'عندي حمى من أمس',
@@ -97,7 +97,6 @@ const formatMessageWithLocation = (content) => {
 const PublicChatPage = () => {
   const navigate = useNavigate();
 
-  // ── Langue ────────────────────────────────────────────────────────────────
   const [lang, setLang] = useState(() => localStorage.getItem('language') || 'fr');
   const t = I18N[lang] || I18N.fr;
   const isRTL = lang === 'ar';
@@ -145,23 +144,75 @@ const PublicChatPage = () => {
     messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  // ── Sauvegarde locale ──────────────────────────────────────────────────────
-  const saveToHistory = (userMessage, botResponse, isUrgent = false) => {
-    const stored = localStorage.getItem('consultationHistory');
-    const history = stored ? JSON.parse(stored) : [];
-    history.unshift({
-      id: Date.now(),
-      date: new Date().toLocaleString('fr-FR'),
-      symptoms: userMessage.substring(0, 200),
-      response: botResponse.substring(0, 300),
-      urgency: isUrgent,
-    });
-    if (history.length > 100) history.pop();
-    localStorage.setItem('consultationHistory', JSON.stringify(history));
-    window.dispatchEvent(new Event('historyUpdate'));
+  // Sauvegarde par SESSION (une conversation = un élément)
+  const saveConversationToHistory = (userMessage, botResponse, sid, isUrgent = false) => {
+    const stored = localStorage.getItem('publicConversations');
+    let conversations = stored ? JSON.parse(stored) : [];
+    
+    let existingConversation = conversations.find(c => c.sessionId === sid);
+    
+    if (existingConversation) {
+      existingConversation.messages.push({
+        user: userMessage,
+        assistant: botResponse,
+        time: nowTime(),
+        isUrgent
+      });
+      existingConversation.updatedAt = new Date().toISOString();
+      existingConversation.messageCount = existingConversation.messages.length;
+    } else {
+      conversations.unshift({
+        sessionId: sid,
+        title: userMessage.substring(0, 50),
+        messages: [{
+          user: userMessage,
+          assistant: botResponse,
+          time: nowTime(),
+          isUrgent
+        }],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messageCount: 1
+      });
+    }
+    
+    if (conversations.length > 30) conversations.pop();
+    
+    localStorage.setItem('publicConversations', JSON.stringify(conversations));
+    window.dispatchEvent(new Event('conversationsUpdate'));
   };
 
-  // ── Sauvegarde MongoDB (si connecté) ───────────────────────────────────────
+  // Migration ancien format
+  useEffect(() => {
+    const oldHistory = localStorage.getItem('consultationHistory');
+    const newConversations = localStorage.getItem('publicConversations');
+    
+    if (oldHistory && !newConversations) {
+      const oldItems = JSON.parse(oldHistory);
+      const converted = [];
+      
+      oldItems.forEach(item => {
+        converted.push({
+          sessionId: `session_${item.id}`,
+          title: item.symptoms?.substring(0, 50) || 'Consultation',
+          messages: [{
+            user: item.symptoms,
+            assistant: item.response,
+            time: '--:--',
+            isUrgent: item.urgency || false
+          }],
+          createdAt: item.date,
+          updatedAt: item.date,
+          messageCount: 1
+        });
+      });
+      
+      localStorage.setItem('publicConversations', JSON.stringify(converted));
+      console.log('✅ Ancien format converti');
+    }
+  }, []);
+
+  // Sauvegarde MongoDB
   const saveConsultation = useCallback(async () => {
     if (!sessionId) { alert('❌ Aucune session en cours'); return; }
     if (!messages.length) { alert('❌ Aucune conversation à sauvegarder'); return; }
@@ -200,7 +251,7 @@ const PublicChatPage = () => {
     }
   }, [isAuthenticated, saveConsultation]);
 
-  // ── Envoi message central ──────────────────────────────────────────────────
+  // Envoi message
   const sendText = useCallback(async (text) => {
     const trimmed = (text || '').trim();
     if (!trimmed || isTypingRef.current) return;
@@ -223,7 +274,7 @@ const PublicChatPage = () => {
       const reply = res.data.reply || (lang === 'ar' ? 'جارٍ المعالجة…' : 'Je traite votre demande…');
       const isUrgent = res.data.severity === 'critique';
       setMessages(prev => [...prev, { role: 'assistant', content: reply, time: nowTime(), urgency: isUrgent }]);
-      saveToHistory(trimmed, reply, isUrgent);
+      saveConversationToHistory(trimmed, reply, sid, isUrgent);
     } catch (error) {
       console.error(error);
       setMessages(prev => [...prev, {
@@ -236,7 +287,6 @@ const PublicChatPage = () => {
     }
   }, [lang]);
 
-  // ── Transcript vocal → envoi auto ──────────────────────────────────────────
   useEffect(() => {
     if (transcript && transcript.trim() && transcriptTs > 0) {
       sendText(transcript);
@@ -247,7 +297,7 @@ const PublicChatPage = () => {
     await sendText(text);
   }, [input, sendText]);
 
-  // ── Géolocalisation ────────────────────────────────────────────────────────
+  // Géolocalisation
   const handleLocationClick = () => {
     resetError();
     if (!navigator.geolocation) { alert('Géolocalisation non supportée'); return; }
@@ -278,7 +328,7 @@ const PublicChatPage = () => {
     });
   };
 
-  // ── Reset conversation (identique au patient) ───────────────────────────────
+  // Reset conversation
   const resetConversation = useCallback(async () => {
     if (sessionId) {
       try {
@@ -313,7 +363,7 @@ const PublicChatPage = () => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); handleSendMessage(); }
   };
 
-  // ── Bouton urgence (identique au patient) ───────────────────────────────────
+  // Bouton urgence
   const handleEmergency = useCallback(async () => {
     if (!sessionId) { alert(lang === 'ar' ? 'أرسل رسالة أولاً.' : "Envoyez d'abord un message."); return; }
     const msg = lang === 'ar'
@@ -339,19 +389,19 @@ const PublicChatPage = () => {
     <PublicLayout>
       <div className={`chat-page${isRTL ? ' rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
 
-        {/* ── Topbar ── */}
+        {/* Topbar */}
         <div className="chat-topbar">
           <span className="chat-topbar-title">{t.title}</span>
           <span className="chat-topbar-badge">{t.badge}</span>
           <div className="chat-topbar-actions">
-            <button className="lang-toggle-btn" onClick={toggleLang} title="Changer de langue / تغيير اللغة">
+            <button className="lang-toggle-btn" onClick={toggleLang}>
               {lang === 'fr' ? '🇲🇦 AR' : '🇫🇷 FR'}
             </button>
             <button className="new-chat-btn" onClick={resetConversation}>{t.newBtn}</button>
           </div>
         </div>
 
-        {/* ── Messages ── */}
+        {/* Messages */}
         <div className="chat-messages">
           {messages.length === 0 && !isTyping ? (
             <div className="chat-welcome">
@@ -410,7 +460,6 @@ const PublicChatPage = () => {
                                 setTimeout(() => setPlayingMsgIdx(null), Math.min(msg.content.length * 55 + 1500, 30000));
                               }
                             }}
-                            title={playingMsgIdx === i ? (isRTL ? 'إيقاف' : 'Arrêter') : (isRTL ? 'استمع' : 'Écouter')}
                           >
                             {playingMsgIdx === i ? (
                               <svg width="10" height="10" viewBox="0 0 24 24" fill="currentColor">
@@ -446,7 +495,7 @@ const PublicChatPage = () => {
           <div ref={messagesEndRef} />
         </div>
 
-        {/* ── Zone de saisie ── */}
+        {/* Zone de saisie */}
         <div className="chat-input-area">
           <div className="chat-input-box">
             <button className="input-tool-btn" aria-label="Camera"><IconCamera /></button>
@@ -462,7 +511,6 @@ const PublicChatPage = () => {
             />
             <button
               className={`input-tool-btn mic-btn${listening ? ' mic-active' : ''}${micLoading ? ' mic-loading' : ''}`}
-              title={listening ? (isRTL ? 'انقر للإيقاف' : 'Cliquez pour arrêter') : (isRTL ? 'انقر للإملاء' : 'Cliquez pour dicter')}
               onClick={(e) => { e.preventDefault(); toggleListening(); }}
               disabled={isTyping || micLoading}
             >
@@ -493,7 +541,7 @@ const PublicChatPage = () => {
           <p className="chat-input-hint">{t.hint}</p>
         </div>
 
-        {/* ── Section sauvegarde ── */}
+        {/* Section sauvegarde */}
         {messages.length > 0 && (
           <div className="save-section">
             {!isAuthenticated ? (

@@ -1,22 +1,30 @@
+/* frontend/src/components/LayoutPatient/PatientLayout/PatientLayout.css */
+
 .Patient-layout {
     display: flex;
-    background: linear-gradient(135deg, #f8faff, #f0f3fd);
+    background: #f9f7f3;
     min-height: 100vh;
+    width: 100%;
 }
 
 .Patient-main-content {
     flex: 1;
-    margin-left: 260px;
-    /* = largeur de la sidebar */
+    margin-left: 260px; /* Largeur de la sidebar */
     min-height: 100vh;
-    padding: 24px 32px;
+    background: #f9f7f3;
+    overflow-x: hidden;
 }
 
-.Patient-page-container {
-    background: rgba(255, 255, 255, 0.8);
-    backdrop-filter: blur(2px);
-    border-radius: 32px;
-    box-shadow: 0 8px 24px rgba(0, 0, 0, 0.03);
-    padding: 24px;
-    border: 1px solid rgba(255, 255, 255, 0.6);
+/* ✅ Pour que les enfants (comme PatientChat) prennent toute la largeur */
+.Patient-main-content > div {
+    width: 100%;
+    height: 100%;
+}
+
+/* Responsive pour mobile */
+@media (max-width: 768px) {
+    .Patient-main-content {
+        margin-left: 0;
+        width: 100%;
+    }
 }

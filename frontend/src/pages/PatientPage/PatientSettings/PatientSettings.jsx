@@ -1,90 +1,134 @@
+// frontend/src/pages/PatientPage/PatientSettings/PatientSettings.jsx
 import React, { useState, useEffect } from 'react';
-import { FaBell, FaPalette, FaGlobe, FaMicrophone, FaMoon, FaSun } from 'react-icons/fa';
+import { FaBell, FaLanguage, FaMoon, FaSun, FaGlobe, FaVolumeUp, FaPalette } from 'react-icons/fa';
 import './PatientSettings.css';
 
 const PatientSettings = () => {
-  const [theme, setTheme] = useState(localStorage.getItem('theme') || 'light');
-  const [language, setLanguage] = useState(localStorage.getItem('language') || 'fr');
-  const [voiceEnabled, setVoiceEnabled] = useState(localStorage.getItem('voiceEnabled') !== 'false');
-  const [notifications, setNotifications] = useState(true);
+    const [settings, setSettings] = useState({
+        language: 'fr',
+        theme: 'light',
+        notifications: true,
+        soundEffects: true,
+        fontSize: 'medium'
+    });
 
-  useEffect(() => {
-    document.body.className = theme === 'dark' ? 'dark-theme' : 'light-theme';
-    localStorage.setItem('theme', theme);
-  }, [theme]);
+    useEffect(() => {
+        const saved = localStorage.getItem('patientSettings');
+        if (saved) {
+            setSettings(JSON.parse(saved));
+        }
+    }, []);
 
-  useEffect(() => {
-    localStorage.setItem('language', language);
-  }, [language]);
+    const updateSetting = (key, value) => {
+        const newSettings = { ...settings, [key]: value };
+        setSettings(newSettings);
+        localStorage.setItem('patientSettings', JSON.stringify(newSettings));
+        
+        // Appliquer les changements immédiatement
+        if (key === 'theme') {
+            document.body.className = value === 'dark' ? 'dark-theme' : 'light-theme';
+            localStorage.setItem('theme', value);
+        }
+        if (key === 'language') {
+            localStorage.setItem('language', value);
+            window.dispatchEvent(new Event('languageChange'));
+        }
+    };
 
-  useEffect(() => {
-    localStorage.setItem('voiceEnabled', voiceEnabled);
-  }, [voiceEnabled]);
+    return (
+        <div className="patient-settings-page">
+            <div className="patient-settings-header">
+                <h1>⚙️ Paramètres</h1>
+                <p>Personnalisez votre expérience MedAssist</p>
+            </div>
 
-  return (
-    <div className="patient-settings-page">
-      <div className="patient-settings-header">
-        <h1>⚙️ Paramètres</h1>
-        <p>Personnalisez votre expérience</p>
-      </div>
+            <div className="patient-settings-grid">
+                {/* Langue */}
+                <div className="patient-settings-card">
+                    <div className="card-icon"><FaLanguage /></div>
+                    <h3>Langue</h3>
+                    <div className="toggle-group">
+                        <button 
+                            className={settings.language === 'fr' ? 'active' : ''}
+                            onClick={() => updateSetting('language', 'fr')}
+                        >
+                            🇫🇷 Français
+                        </button>
+                        <button 
+                            className={settings.language === 'ar' ? 'active' : ''}
+                            onClick={() => updateSetting('language', 'ar')}
+                        >
+                            🇲🇦 العربية
+                        </button>
+                        <button 
+                            className={settings.language === 'en' ? 'active' : ''}
+                            onClick={() => updateSetting('language', 'en')}
+                        >
+                            🇬🇧 English
+                        </button>
+                    </div>
+                </div>
 
-      <div className="patient-settings-grid">
-        {/* Thème */}
-        <div className="patient-settings-card">
-          <div className="card-icon"><FaPalette /></div>
-          <h3>Apparence</h3>
-          <div className="toggle-group">
-            <button className={theme === 'light' ? 'active' : ''} onClick={() => setTheme('light')}>
-              <FaSun /> Clair
-            </button>
-            <button className={theme === 'dark' ? 'active' : ''} onClick={() => setTheme('dark')}>
-              <FaMoon /> Sombre
-            </button>
-          </div>
+                {/* Thème */}
+                <div className="patient-settings-card">
+                    <div className="card-icon"><FaPalette /></div>
+                    <h3>Apparence</h3>
+                    <div className="toggle-group">
+                        <button 
+                            className={settings.theme === 'light' ? 'active' : ''}
+                            onClick={() => updateSetting('theme', 'light')}
+                        >
+                            <FaSun /> Clair
+                        </button>
+                        <button 
+                            className={settings.theme === 'dark' ? 'active' : ''}
+                            onClick={() => updateSetting('theme', 'dark')}
+                        >
+                            <FaMoon /> Sombre
+                        </button>
+                    </div>
+                </div>
+
+                {/* Notifications */}
+                <div className="patient-settings-card">
+                    <div className="card-icon"><FaBell /></div>
+                    <h3>Notifications</h3>
+                    <label className="toggle-label">
+                        <span>Recevoir des alertes</span>
+                        <div className="switch">
+                            <input 
+                                type="checkbox" 
+                                checked={settings.notifications}
+                                onChange={(e) => updateSetting('notifications', e.target.checked)}
+                            />
+                            <span className="slider"></span>
+                        </div>
+                    </label>
+                </div>
+
+                {/* Sons */}
+                <div className="patient-settings-card">
+                    <div className="card-icon"><FaVolumeUp /></div>
+                    <h3>Effets sonores</h3>
+                    <label className="toggle-label">
+                        <span>Activer les sons</span>
+                        <div className="switch">
+                            <input 
+                                type="checkbox" 
+                                checked={settings.soundEffects}
+                                onChange={(e) => updateSetting('soundEffects', e.target.checked)}
+                            />
+                            <span className="slider"></span>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div className="patient-settings-footer">
+                <p>MedAssist © 2026 - Vos données sont en sécurité</p>
+            </div>
         </div>
-
-        {/* Langue */}
-        <div className="patient-settings-card">
-          <div className="card-icon"><FaGlobe /></div>
-          <h3>Langue</h3>
-          <div className="toggle-group">
-            <button className={language === 'fr' ? 'active' : ''} onClick={() => setLanguage('fr')}>
-              🇫🇷 Français
-            </button>
-            <button className={language === 'ar' ? 'active' : ''} onClick={() => setLanguage('ar')}>
-              🇲🇦 العربية
-            </button>
-          </div>
-        </div>
-
-        {/* Voix */}
-        <div className="patient-settings-card">
-          <div className="card-icon"><FaMicrophone /></div>
-          <h3>Réponses vocales</h3>
-          <label className="switch">
-            <input type="checkbox" checked={voiceEnabled} onChange={(e) => setVoiceEnabled(e.target.checked)} />
-            <span className="slider round"></span>
-          </label>
-          <span className="toggle-label">{voiceEnabled ? 'Activée' : 'Désactivée'}</span>
-        </div>
-
-        {/* Notifications */}
-        <div className="patient-settings-card">
-          <div className="card-icon"><FaBell /></div>
-          <h3>Notifications</h3>
-          <label className="switch">
-            <input type="checkbox" checked={notifications} onChange={(e) => setNotifications(e.target.checked)} />
-            <span className="slider round"></span>
-          </label>
-          <span className="toggle-label">{notifications ? 'Activées' : 'Désactivées'}</span>
-        </div>
-      </div>
-
-      <div className="patient-settings-footer">
-        <p>MedAssist – Application médicale pré-hospitalière</p>
-      </div>
-    </div>
-  );
+    );
 };
 
 export default PatientSettings;

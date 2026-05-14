@@ -35,18 +35,18 @@ const IconCamera = () => (
   </svg>
 );
 
-// ── Contenu multilingue ────────────────────────────────────────────────────────
+// Contenu multilingue
 const I18N = {
   fr: {
-    title:       'Consultation médicale',
-    badge:       'Assistant IA',
-    newBtn:      '+ Nouveau',
-    welcome:     "Bonjour, je suis l'assistant médical. Décrivez votre situation.",
-    welcomeSub:  'Décrivez vos symptômes et je vous fournirai des conseils adaptés.',
+    title: 'Consultation médicale',
+    badge: 'Assistant IA',
+    newBtn: '+ Nouveau',
+    welcome: "Bonjour, je suis l'assistant médical. Décrivez votre situation.",
+    welcomeSub: 'Décrivez vos symptômes et je vous fournirai des conseils adaptés.',
     placeholder: 'Décrivez vos symptômes…',
-    recording:   'Enregistrement… Parlez maintenant',
-    transcribing:'Transcription en cours…',
-    hint:        'MedAssist ne remplace pas un avis médical professionnel.',
+    recording: 'Enregistrement… Parlez maintenant',
+    transcribing: 'Transcription en cours…',
+    hint: 'MedAssist ne remplace pas un avis médical professionnel.',
     locationPrompt: 'Partagez votre position pour une intervention plus rapide (optionnel)',
     suggestions: [
       "J'ai de la fièvre depuis hier",
@@ -56,15 +56,15 @@ const I18N = {
     ],
   },
   ar: {
-    title:       'الاستشارة الطبية',
-    badge:       'مساعد ذكاء اصطناعي',
-    newBtn:      '+ جديد',
-    welcome:     'مرحبًا، أنا المساعد الطبي. يرجى وصف حالتك.',
-    welcomeSub:  'صف أعراضك وسأقدم لك النصائح المناسبة.',
+    title: 'الاستشارة الطبية',
+    badge: 'مساعد ذكاء اصطناعي',
+    newBtn: '+ جديد',
+    welcome: 'مرحبًا، أنا المساعد الطبي. يرجى وصف حالتك.',
+    welcomeSub: 'صف أعراضك وسأقدم لك النصائح المناسبة.',
     placeholder: 'صف أعراضك…',
-    recording:   'جارٍ التسجيل… تحدث الآن',
-    transcribing:'جارٍ التحويل…',
-    hint:        'لا يُغني MedAssist عن الاستشارة الطبية المتخصصة.',
+    recording: 'جارٍ التسجيل… تحدث الآن',
+    transcribing: 'جارٍ التحويل…',
+    hint: 'لا يُغني MedAssist عن الاستشارة الطبية المتخصصة.',
     locationPrompt: 'شارك موقعك لتدخل أسرع (اختياري)',
     suggestions: [
       'عندي حمى من أمس',
@@ -96,7 +96,6 @@ const formatMessageWithLocation = (content) => {
 const PatientChat = () => {
   const token = localStorage.getItem('token');
 
-  // ── Langue (fr / ar) ────────────────────────────────────────────────────────
   const [lang, setLang] = useState(() => localStorage.getItem('language') || 'fr');
   const t = I18N[lang] || I18N.fr;
   const isRTL = lang === 'ar';
@@ -107,24 +106,30 @@ const PatientChat = () => {
     localStorage.setItem('language', next);
   };
 
-  const [messages,    setMessages]    = useState([]);
-  const [sessionId,   setSessionId]   = useState(() => localStorage.getItem('currentSessionId') || null);
-  const [userId,      setUserId]      = useState(() => localStorage.getItem('userId') || null);
-  const [input,       setInput]       = useState('');
-  const [isTyping,    setIsTyping]    = useState(false);
+  const [messages, setMessages] = useState([]);
+  const [sessionId, setSessionId] = useState(() => localStorage.getItem('currentSessionId') || null);
+  const [userId, setUserId] = useState(() => localStorage.getItem('userId') || null);
+  const [input, setInput] = useState('');
+  const [isTyping, setIsTyping] = useState(false);
   const [emergencyDisabled, setEmergencyDisabled] = useState(false);
-  const messagesEndRef = useRef(null);
-  const textareaRef    = useRef(null);
+  const [playingMsgIdx, setPlayingMsgIdx] = useState(null);
 
-  const { speak, cancel, speaking } = useSpeechSynthesis();
+  const messagesEndRef = useRef(null);
+  const textareaRef = useRef(null);
+
+  const { speak, cancel } = useSpeechSynthesis();
   const { transcript, transcriptTs, listening, isLoading: micLoading, toggleListening } = useSpeechRecognition();
   const { loading: locLoading, error: locError, getLocation, resetError } = useGeolocation();
 
-  const [playingMsgIdx, setPlayingMsgIdx] = useState(null);
   const locationSentRef = useRef(false);
   const [locationSentInThisConversation, setLocationSentInThisConversation] = useState(false);
+  const sessionIdRef = useRef(sessionId);
+  const isTypingRef = useRef(isTyping);
 
-  // ── Persistance session ────────────────────────────────────────────────────
+  useEffect(() => { isTypingRef.current = isTyping; }, [isTyping]);
+  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
+
+  // Sauvegarde par SESSION pour MongoDB
   const saveSessionToHistory = useCallback((sid, firstMessage) => {
     try {
       const uid = localStorage.getItem('userId') || 'guest';
@@ -137,12 +142,15 @@ const PatientChat = () => {
           id: sid,
           title: firstMessage.length > 45 ? firstMessage.substring(0, 45) + '...' : firstMessage,
           updatedAt: Date.now(),
+          messageCount: 1
         });
         localStorage.setItem(key, JSON.stringify(sessions.slice(0, 20)));
       } else {
         existing.updatedAt = Date.now();
+        existing.messageCount = (existing.messageCount || 0) + 1;
         localStorage.setItem(key, JSON.stringify(sessions));
       }
+      window.dispatchEvent(new Event('conversationsUpdate'));
     } catch (e) {
       console.error('Erreur sauvegarde session:', e);
     }
@@ -161,6 +169,7 @@ const PatientChat = () => {
           sessions[idx].title = summary;
           sessions[idx].updatedAt = Date.now();
           localStorage.setItem(key, JSON.stringify(sessions));
+          window.dispatchEvent(new Event('conversationsUpdate'));
         }
       }
     }
@@ -193,12 +202,7 @@ const PatientChat = () => {
     messagesEndRef.current && messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isTyping]);
 
-  const sessionIdRef = useRef(sessionId);
-  const isTypingRef  = useRef(isTyping);
-  useEffect(() => { sessionIdRef.current = sessionId; }, [sessionId]);
-  useEffect(() => { isTypingRef.current  = isTyping;  }, [isTyping]);
-
-  // ── Envoi central ──────────────────────────────────────────────────────────
+  // Envoi central
   const sendText = useCallback(async (text) => {
     const trimmed = (text || '').trim();
     if (!trimmed || isTypingRef.current) return;
@@ -236,15 +240,13 @@ const PatientChat = () => {
     } finally {
       setIsTyping(false);
     }
-  }, [speak, saveSessionToHistory, saveSessionSummary, lang]);
+  }, [saveSessionToHistory, saveSessionSummary, lang]);
 
-  // ── Transcript vocal → envoi auto ─────────────────────────────────────────
   useEffect(() => {
     if (transcript && transcript.trim() && transcriptTs > 0) {
       sendText(transcript);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [transcriptTs]);
+  }, [transcriptTs, sendText]);
 
   const handleSendMessage = useCallback(async (text = input) => {
     await sendText(text);
@@ -278,46 +280,36 @@ const PatientChat = () => {
     });
   };
 
-  // Seulement la partie resetConversation modifiée :
-
-const resetConversation = useCallback(async () => {
-    // ✅ Envoyer resetSession=true au backend pour forcer la suppression
+  const resetConversation = useCallback(async () => {
     if (sessionId) {
-        try {
-            await axios.post('http://localhost:5000/api/chat/reset-session', { 
-                sessionId: sessionId,
-                reset: true 
-            });
-            console.log('✅ Session backend réinitialisée');
-        } catch (err) {
-            console.error("Erreur nettoyage session:", err);
-        }
+      try {
+        await axios.post('http://localhost:5000/api/chat/reset-session', { 
+          sessionId: sessionId,
+          reset: true 
+        });
+        console.log('✅ Session backend réinitialisée');
+      } catch (err) {
+        console.error("Erreur nettoyage session:", err);
+      }
     }
-    
-    // ✅ Vider l'état local
-    setMessages([]);
-    setInput('');
-    
-    // ✅ Créer un NOUVEL ID de session
     const newSessionId = Date.now().toString();
+    setMessages([]);
     setSessionId(newSessionId);
     localStorage.setItem('currentSessionId', newSessionId);
-    
-    // ✅ Annuler toute lecture audio en cours
+    setInput('');
     if (window.speechSynthesis) {
-        window.speechSynthesis.cancel();
+      window.speechSynthesis.cancel();
     }
-    cancel(); // Fonction de useSpeechSynthesis
-    
-    // ✅ Réinitialiser les refs
+    cancel();
     locationSentRef.current = false;
     setLocationSentInThisConversation(false);
     resetError();
     setEmergencyDisabled(false);
     setPlayingMsgIdx(null);
-    
+    window.dispatchEvent(new Event('conversationsUpdate'));
     console.log('🔄 Nouvelle conversation créée, ID:', newSessionId);
-}, [sessionId, resetError, cancel]);
+  }, [sessionId, resetError, cancel]);
+
   const handleEmergency = useCallback(async () => {
     if (!sessionId) { alert(lang === 'ar' ? 'أرسل رسالة أولاً.' : "Envoyez d'abord un message."); return; }
     const msg = lang === 'ar'
@@ -351,13 +343,11 @@ const resetConversation = useCallback(async () => {
 
   return (
     <div className={`chat-page${isRTL ? ' rtl' : ''}`} dir={isRTL ? 'rtl' : 'ltr'}>
-      {/* ── Topbar ── */}
       <div className="chat-topbar">
         <span className="chat-topbar-title">{t.title}</span>
         <span className="chat-topbar-badge">{t.badge}</span>
         <div className="chat-topbar-actions">
-          {/* Bouton langue FR/AR */}
-          <button className="lang-toggle-btn" onClick={toggleLang} title="Changer de langue / تغيير اللغة">
+          <button className="lang-toggle-btn" onClick={toggleLang}>
             {lang === 'fr' ? '🇲🇦 AR' : '🇫🇷 FR'}
           </button>
           <button className="new-chat-btn" onClick={resetConversation} title={t.newBtn}>
@@ -366,7 +356,6 @@ const resetConversation = useCallback(async () => {
         </div>
       </div>
 
-      {/* ── Messages ── */}
       <div className="chat-messages">
         {messages.length === 0 && !isTyping ? (
           <div className="chat-welcome">
@@ -456,7 +445,6 @@ const resetConversation = useCallback(async () => {
         <div ref={messagesEndRef} />
       </div>
 
-      {/* ── Zone de saisie ── */}
       <div className="chat-input-area">
         <div className="chat-input-box">
           <button className="input-tool-btn" aria-label="Camera"><IconCamera /></button>
@@ -472,7 +460,6 @@ const resetConversation = useCallback(async () => {
           />
           <button
             className={`input-tool-btn mic-btn${listening ? ' mic-active' : ''}${micLoading ? ' mic-loading' : ''}`}
-            title={listening ? (isRTL ? 'انقر للإيقاف' : 'Cliquez pour arrêter') : (isRTL ? 'انقر للإملاء' : 'Cliquez pour dicter')}
             onClick={(e) => { e.preventDefault(); toggleListening(); }}
             disabled={isTyping || micLoading}
           >

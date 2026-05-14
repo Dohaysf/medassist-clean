@@ -1,6 +1,5 @@
 /* ============================================
-   PatientChat.css — style Claude.ai
-   avec boutons localisation, urgence et micro
+   PatientChat.css — style Claude.ai (identique PublicChatPage)
    ============================================ */
 
 :root {
@@ -12,22 +11,23 @@
     --border: rgba(0, 0, 0, 0.08);
     --border-input: #e3e1db;
     --accent: #c96a3a;
+    --accent-secondary: #2EC5C0;
     --danger: #d9534f;
+    --success: #5cb85c;
+    --warning: #f0ad4e;
     --mic-active: #e53e3e;
 }
 
 .chat-page {
     display: flex;
     flex-direction: column;
-    height: 100%;
+    height: 100vh;
     min-height: 0;
     background: var(--bg);
     overflow: hidden;
 }
 
-
-/* ── Topbar ──────────────────────────────────────────────────────────────── */
-
+/* Topbar */
 .chat-topbar {
     padding: 13px 24px;
     background: var(--bg);
@@ -54,6 +54,29 @@
     border: 1px solid var(--border-input);
 }
 
+.chat-topbar-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.lang-toggle-btn {
+    font-size: 0.78rem;
+    font-weight: 600;
+    background: var(--bg-card);
+    color: var(--accent);
+    border: 1px solid var(--accent);
+    border-radius: 8px;
+    padding: 4px 10px;
+    cursor: pointer;
+    transition: all 0.15s;
+}
+
+.lang-toggle-btn:hover {
+    background: var(--accent);
+    color: #fff;
+}
+
 .new-chat-btn {
     font-size: 0.8rem;
     font-weight: 500;
@@ -72,9 +95,7 @@
     color: var(--text-primary);
 }
 
-
-/* ── Zone des messages ───────────────────────────────────────────────────── */
-
+/* Zone des messages - prend toute la largeur */
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -98,9 +119,7 @@
     border-radius: 10px;
 }
 
-
-/* ── Écran d'accueil ─────────────────────────────────────────────────────── */
-
+/* Écran d'accueil */
 .chat-welcome {
     display: flex;
     flex-direction: column;
@@ -156,14 +175,12 @@
     color: var(--text-primary);
 }
 
-
-/* ── Bulles de message ───────────────────────────────────────────────────── */
-
+/* Bulles de message */
 .msg-row {
     display: flex;
     gap: 14px;
     align-items: flex-start;
-    max-width: 720px;
+    max-width: 100%;
     width: 100%;
 }
 
@@ -203,7 +220,7 @@
     padding: 12px 16px;
     font-size: 0.92rem;
     line-height: 1.65;
-    max-width: 580px;
+    max-width: 80%;
 }
 
 .msg-row.assistant .msg-bubble {
@@ -222,20 +239,24 @@
     color: var(--text-primary);
 }
 
+.msg-footer {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-top: 4px;
+    padding: 0 4px;
+}
+
 .msg-time {
     font-size: 0.7rem;
     color: var(--text-muted);
-    margin-top: 4px;
-    padding: 0 4px;
 }
 
 .msg-row.user .msg-time {
     text-align: right;
 }
 
-
-/* ── Indicateur de frappe ────────────────────────────────────────────────── */
-
+/* Typing indicator */
 .typing-indicator {
     display: flex;
     gap: 5px;
@@ -251,28 +272,15 @@
     animation: typingBounce 1.2s infinite;
 }
 
-.typing-dot:nth-child(2) {
-    animation-delay: 0.2s;
-}
-
-.typing-dot:nth-child(3) {
-    animation-delay: 0.4s;
-}
+.typing-dot:nth-child(2) { animation-delay: 0.2s; }
+.typing-dot:nth-child(3) { animation-delay: 0.4s; }
 
 @keyframes typingBounce {
-    0%,
-    60%,
-    100% {
-        transform: translateY(0);
-    }
-    30% {
-        transform: translateY(-4px);
-    }
+    0%, 60%, 100% { transform: translateY(0); }
+    30% { transform: translateY(-4px); }
 }
 
-
-/* ── Zone de saisie ──────────────────────────────────────────────────────── */
-
+/* Zone de saisie */
 .chat-input-area {
     padding: 12px 24px 20px;
     background: var(--bg);
@@ -312,9 +320,7 @@
     color: var(--text-muted);
 }
 
-
-/* ── Boutons outils ──────────────────────────────────────────────────────── */
-
+/* Boutons outils */
 .input-tool-btn {
     width: 34px;
     height: 34px;
@@ -340,66 +346,30 @@
     cursor: not-allowed;
 }
 
-
-/* ── Bouton microphone ───────────────────────────────────────────────────── */
-
-.mic-btn {
-    /* état par défaut : identique aux autres input-tool-btn */
-    user-select: none;
-    -webkit-user-select: none;
-    touch-action: none;
-    /* évite le scroll accidentel sur mobile */
-}
-
+/* Microphone */
 .mic-btn.mic-active {
     color: var(--mic-active);
     background: rgba(229, 62, 62, 0.1);
     animation: micPulse 1s ease-in-out infinite;
 }
 
-.mic-btn.mic-active svg {
-    /* légère animation de l'icône pendant l'écoute */
-    animation: micIconScale 0.8s ease-in-out infinite alternate;
-}
-
 @keyframes micPulse {
-    0%,
-    100% {
-        box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.3);
-    }
-    50% {
-        box-shadow: 0 0 0 5px rgba(229, 62, 62, 0);
-    }
-}
-
-@keyframes micIconScale {
-    from {
-        transform: scale(1);
-    }
-    to {
-        transform: scale(1.15);
-    }
+    0%, 100% { box-shadow: 0 0 0 0 rgba(229, 62, 62, 0.3); }
+    50% { box-shadow: 0 0 0 5px rgba(229, 62, 62, 0); }
 }
 
 .mic-btn.mic-loading {
     color: var(--accent);
     opacity: 0.7;
     animation: micSpin 1s linear infinite;
-    pointer-events: none;
 }
 
 @keyframes micSpin {
-    from {
-        transform: rotate(0deg);
-    }
-    to {
-        transform: rotate(360deg);
-    }
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
 }
 
-
-/* ── Bouton urgence ──────────────────────────────────────────────────────── */
-
+/* Bouton urgence */
 .emergency-btn {
     color: var(--danger);
 }
@@ -408,9 +378,17 @@
     background: rgba(217, 83, 79, 0.1);
 }
 
+/* Bouton localisation */
+.location-btn {
+    color: var(--accent-secondary);
+}
 
-/* ── Bouton envoyer ──────────────────────────────────────────────────────── */
+.location-btn:hover:not(:disabled) {
+    background: rgba(46, 197, 192, 0.1);
+    color: #1a9e9a;
+}
 
+/* Bouton envoyer */
 .input-send-btn {
     width: 34px;
     height: 34px;
@@ -437,186 +415,7 @@
     transform: none;
 }
 
-
-/* ── Géolocalisation ─────────────────────────────────────────────────────── */
-
-.location-btn {
-    color: #2EC5C0;
-}
-
-.location-btn:hover:not(:disabled) {
-    background: rgba(46, 197, 192, 0.1);
-    color: #1a9e9a;
-}
-
-.location-prompt {
-    font-size: 0.7rem;
-    color: var(--text-muted);
-    text-align: center;
-    margin-top: 8px;
-}
-
-.location-error {
-    font-size: 0.7rem;
-    color: var(--danger);
-    text-align: center;
-    margin-top: 4px;
-}
-
-.location-error button {
-    background: none;
-    border: none;
-    color: var(--accent);
-    text-decoration: underline;
-    cursor: pointer;
-}
-
-
-/* Badge localisation dans la bulle utilisateur */
-
-.message-location-badge {
-    display: inline-flex;
-    align-items: center;
-    gap: 6px;
-    background: rgba(46, 197, 192, 0.15);
-    color: #2EC5C0;
-    padding: 4px 12px;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    margin-top: 8px;
-    width: fit-content;
-}
-
-.msg-row.user .message-location-badge {
-    background: rgba(46, 197, 192, 0.2);
-    color: #1a9e9a;
-}
-
-
-/* ── Message système (notifications géoloc) ──────────────────────────────── */
-
-.system-message {
-    display: flex;
-    justify-content: center;
-    margin: 8px 0;
-}
-
-.system-message-content {
-    background: rgba(0, 0, 0, 0.05);
-    color: var(--text-muted);
-    padding: 6px 14px;
-    border-radius: 20px;
-    font-size: 0.7rem;
-    max-width: 80%;
-    text-align: center;
-}
-
-
-/* ── Hint bas de page ────────────────────────────────────────────────────── */
-
-.chat-input-hint {
-    font-size: 0.72rem;
-    color: var(--text-muted);
-    text-align: center;
-    margin-top: 8px;
-}
-
-
-/* ── Responsive ──────────────────────────────────────────────────────────── */
-
-@media (max-width: 768px) {
-    .chat-messages,
-    .chat-input-area {
-        padding-left: 16px;
-        padding-right: 16px;
-    }
-    .msg-bubble {
-        max-width: 85vw;
-    }
-}
-
-
-/* ── RTL (arabe) ─────────────────────────────────────────────────────────── */
-
-.chat-page.rtl .msg-row.user {
-    flex-direction: row;
-    align-self: flex-start;
-}
-
-.chat-page.rtl .msg-row.assistant {
-    flex-direction: row-reverse;
-    align-self: flex-end;
-}
-
-.chat-page.rtl .msg-bubble.rtl {
-    border-radius: 16px;
-    border-top-right-radius: 3px;
-    border-top-left-radius: 16px;
-}
-
-.chat-page.rtl .msg-row.user .msg-bubble {
-    border-top-left-radius: 3px;
-    border-top-right-radius: 16px;
-}
-
-.chat-page.rtl .msg-time.rtl {
-    text-align: left;
-}
-
-.chat-page.rtl .chat-input-box {
-    flex-direction: row-reverse;
-}
-
-.chat-page.rtl textarea {
-    text-align: right;
-    font-family: 'Segoe UI', Tahoma, Arial, sans-serif;
-}
-
-
-/* ── Topbar actions ──────────────────────────────────────────────────────── */
-
-.chat-topbar-actions {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-}
-
-
-/* ── Bouton langue ───────────────────────────────────────────────────────── */
-
-.lang-toggle-btn {
-    font-size: 0.78rem;
-    font-weight: 600;
-    background: var(--bg-card);
-    color: var(--accent);
-    border: 1px solid var(--accent);
-    border-radius: 8px;
-    padding: 4px 10px;
-    cursor: pointer;
-    transition: all 0.15s;
-    white-space: nowrap;
-}
-
-.lang-toggle-btn:hover {
-    background: var(--accent);
-    color: #fff;
-}
-
-
-/* ── Bouton audio sous les messages assistant ────────────────────────────── */
-
-.msg-footer {
-    display: flex;
-    align-items: center;
-    gap: 8px;
-    margin-top: 4px;
-    padding: 0 4px;
-}
-
-.msg-footer.rtl {
-    flex-direction: row-reverse;
-}
-
+/* Audio play button */
 .audio-play-btn {
     display: inline-flex;
     align-items: center;
@@ -648,11 +447,120 @@
 }
 
 @keyframes audioPlaying {
-    0%,
-    100% {
-        box-shadow: 0 0 0 0 rgba(201, 106, 58, 0.4);
+    0%, 100% { box-shadow: 0 0 0 0 rgba(201, 106, 58, 0.4); }
+    50% { box-shadow: 0 0 0 4px rgba(201, 106, 58, 0); }
+}
+
+/* Location prompt */
+.location-prompt {
+    font-size: 0.7rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+}
+
+.location-error {
+    font-size: 0.7rem;
+    color: var(--danger);
+    text-align: center;
+    margin-top: 4px;
+}
+
+.location-error button {
+    background: none;
+    border: none;
+    color: var(--accent);
+    text-decoration: underline;
+    cursor: pointer;
+}
+
+/* Message location badge */
+.message-location-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(46, 197, 192, 0.15);
+    color: var(--accent-secondary);
+    padding: 4px 12px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    margin-top: 8px;
+    width: fit-content;
+}
+
+/* System message */
+.system-message {
+    display: flex;
+    justify-content: center;
+    margin: 8px 0;
+}
+
+.system-message-content {
+    background: rgba(0, 0, 0, 0.05);
+    color: var(--text-muted);
+    padding: 6px 14px;
+    border-radius: 20px;
+    font-size: 0.7rem;
+    max-width: 80%;
+    text-align: center;
+}
+
+/* Urgence badge */
+.urgency-badge {
+    display: inline-block;
+    background: rgba(217, 83, 79, 0.1);
+    color: var(--danger);
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 0.65rem;
+    font-weight: 500;
+    margin-left: 8px;
+}
+
+.chat-input-hint {
+    font-size: 0.72rem;
+    color: var(--text-muted);
+    text-align: center;
+    margin-top: 8px;
+}
+
+/* RTL Support */
+.chat-page.rtl .msg-row.user {
+    flex-direction: row;
+    align-self: flex-start;
+}
+
+.chat-page.rtl .msg-row.assistant {
+    flex-direction: row-reverse;
+    align-self: flex-end;
+}
+
+.chat-page.rtl .msg-row.user .msg-bubble {
+    border-radius: 16px;
+    border-top-left-radius: 3px;
+    border-top-right-radius: 16px;
+}
+
+.chat-page.rtl .msg-time.rtl {
+    text-align: left;
+}
+
+.chat-page.rtl .chat-input-box {
+    flex-direction: row-reverse;
+}
+
+.chat-page.rtl textarea {
+    text-align: right;
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .chat-messages,
+    .chat-input-area {
+        padding-left: 16px;
+        padding-right: 16px;
     }
-    50% {
-        box-shadow: 0 0 0 4px rgba(201, 106, 58, 0);
+    .msg-bubble {
+        max-width: 85%;
     }
 }
