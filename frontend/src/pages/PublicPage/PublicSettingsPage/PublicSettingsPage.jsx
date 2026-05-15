@@ -1,3 +1,4 @@
+// frontend/src/pages/PublicSettingsPage/PublicSettingsPage.jsx
 import React, { useState, useEffect } from 'react';
 import PublicLayout from '../../../components/LayoutPublic/PublicLayout';
 import useTranslation from '../../../hooks/useTranslation';
@@ -24,10 +25,23 @@ const PublicSettingsPage = () => {
   useEffect(() => {
     loadSettings();
     checkNotificationPermission();
+    applySavedTheme(); // ✅ Appliquer le thème au chargement
   }, []);
 
-  // Re-render when language changes (hook already handles state update)
-  useEffect(() => {}, [language]);
+  // ✅ Appliquer le thème sauvegardé au chargement de la page
+  const applySavedTheme = () => {
+    const savedSettings = localStorage.getItem('medassist_settings');
+    if (savedSettings) {
+      try {
+        const parsed = JSON.parse(savedSettings);
+        if (parsed.theme) {
+          applyTheme(parsed.theme);
+        }
+      } catch (e) {
+        console.error('Erreur chargement thème:', e);
+      }
+    }
+  };
 
   const loadSettings = () => {
     const savedSettings = localStorage.getItem('medassist_settings');
@@ -35,6 +49,13 @@ const PublicSettingsPage = () => {
       try {
         const parsed = JSON.parse(savedSettings);
         setSettings(prev => ({ ...prev, ...parsed }));
+        // ✅ Appliquer immédiatement les paramètres chargés
+        if (parsed.theme) applyTheme(parsed.theme);
+        if (parsed.fontSize) applyFontSize(parsed.fontSize);
+        if (parsed.language) applyLanguage(parsed.language);
+        if (parsed.reducedAnimations) applyReducedAnimations(parsed.reducedAnimations);
+        if (parsed.compactMode) applyCompactMode(parsed.compactMode);
+        if (parsed.readingMode) applyReadingMode(parsed.readingMode);
       } catch (e) {
         console.error('Erreur chargement settings:', e);
       }
@@ -81,24 +102,37 @@ const PublicSettingsPage = () => {
   };
 
   const applyTheme = (theme) => {
+    console.log('🎨 Application du thème:', theme);
+    
+    // ✅ Supprimer toutes les classes de thème existantes
     document.body.classList.remove('dark-mode', 'light-mode', 'auto-mode');
+    
     if (theme === 'dark') {
       document.body.classList.add('dark-mode');
+      // ✅ Appliquer aussi au localStorage pour persistance
+      localStorage.setItem('theme', 'dark');
     } else if (theme === 'light') {
       document.body.classList.add('light-mode');
+      localStorage.setItem('theme', 'light');
     } else {
       document.body.classList.add('auto-mode');
+      localStorage.setItem('theme', 'auto');
+      // Détection automatique selon le système
       if (window.matchMedia('(prefers-color-scheme: dark)').matches) {
         document.body.classList.add('dark-mode');
       } else {
         document.body.classList.add('light-mode');
       }
     }
+    
+    // ✅ Dispatch un événement pour que les autres composants réagissent
+    window.dispatchEvent(new CustomEvent('themeChange', { detail: { theme: theme } }));
   };
 
   const applyFontSize = (size) => {
     const sizes = { small: '13px', medium: '16px', large: '19px', xlarge: '22px' };
-    document.documentElement.style.fontSize = sizes[size] || '16px';
+    const fontSize = sizes[size] || '16px';
+    document.documentElement.style.fontSize = fontSize;
     localStorage.setItem('fontSize', size);
   };
 
@@ -129,6 +163,8 @@ const PublicSettingsPage = () => {
   const updateSetting = (key, value) => {
     const newSettings = { ...settings, [key]: value };
     setSettings(newSettings);
+    
+    // ✅ Application immédiate sans attendre la sauvegarde
     if (key === 'language') applyLanguage(value);
     if (key === 'theme') applyTheme(value);
     if (key === 'fontSize') applyFontSize(value);
@@ -180,6 +216,7 @@ const PublicSettingsPage = () => {
     };
     setSettings(defaultSettings);
     localStorage.setItem('medassist_settings', JSON.stringify(defaultSettings));
+    localStorage.setItem('theme', 'light');
     applyLanguage('fr');
     applyTheme('light');
     applyFontSize('medium');
@@ -259,7 +296,7 @@ const PublicSettingsPage = () => {
               </div>
             </div>
 
-            {/* Thème */}
+            {/* Thème - Dark mode fonctionnel */}
             <div className="settings-section">
               <div className="section-icon">🎨</div>
               <div className="section-content">

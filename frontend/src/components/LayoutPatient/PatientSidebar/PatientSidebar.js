@@ -28,6 +28,23 @@ const IconClose = () => (
     </svg>
 );
 
+// Icône collapse/expand
+const IconCollapse = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="9" y1="3" x2="9" y2="21" />
+    </svg>
+);
+
+const IconExpand = () => (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <line x1="15" y1="3" x2="15" y2="21" />
+    </svg>
+);
+
 const PatientSidebar = () => {
     const navigate = useNavigate();
     const [user, setUser] = useState(null);
@@ -35,6 +52,7 @@ const PatientSidebar = () => {
     const [recentSessions, setRecentSessions] = useState([]);
     const [searchQuery, setSearchQuery] = useState('');
     const [showSearch, setShowSearch] = useState(false);
+    const [collapsed, setCollapsed] = useState(false);  // ✅ État pour collapse
 
     const loadRecentSessions = () => {
         if (!user) return;
@@ -162,93 +180,101 @@ const PatientSidebar = () => {
     const displayName = user && user.name ? user.name : 'Utilisateur';
 
     return (
-        <aside className="Patient-sidebar">
-            <div className="Patient-sidebar-logo">
-                <h2>MedAssist</h2>
+        <aside className={`Patient-sidebar ${collapsed ? 'collapsed' : ''}`}>
+            {/* HEADER avec bouton collapse */}
+            <div className="Patient-sidebar-header">
+                {!collapsed && <h2>MedAssist</h2>}
+                <button className="sidebar-collapse-btn" onClick={() => setCollapsed(!collapsed)}>
+                    {collapsed ? <IconExpand /> : <IconCollapse />}
+                </button>
             </div>
 
             <button className="new-chat-btn" onClick={newConsultation}>
                 <span className="plus-icon">+</span>
-                Nouvelle consultation
+                {!collapsed && <span>Nouvelle consultation</span>}
             </button>
 
             <div className="sidebar-content">
                 {/* Recherche */}
-                <div className="sidebar-search-wrapper" style={{ padding: '0 6px', marginBottom: '8px' }}>
-                    {showSearch ? (
-                        <div className="sidebar-search-active" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(0,0,0,0.06)', borderRadius: '8px' }}>
-                            <span style={{ opacity: 0.55 }}><IconSearch /></span>
-                            <input
-                                type="text"
-                                placeholder="Rechercher une consultation..."
-                                value={searchQuery}
-                                onChange={(e) => setSearchQuery(e.target.value)}
-                                autoFocus
-                                style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '0.85rem' }}
-                            />
-                            <button className="search-close-btn" onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
-                                <IconClose />
+                {!collapsed && (
+                    <div className="sidebar-search-wrapper" style={{ padding: '0 6px', marginBottom: '8px' }}>
+                        {showSearch ? (
+                            <div className="sidebar-search-active" style={{ display: 'flex', alignItems: 'center', gap: '8px', padding: '8px 12px', background: 'rgba(0,0,0,0.06)', borderRadius: '8px' }}>
+                                <span style={{ opacity: 0.55 }}><IconSearch /></span>
+                                <input
+                                    type="text"
+                                    placeholder="Rechercher une consultation..."
+                                    value={searchQuery}
+                                    onChange={(e) => setSearchQuery(e.target.value)}
+                                    autoFocus
+                                    style={{ flex: 1, background: 'transparent', border: 'none', outline: 'none', fontSize: '0.85rem' }}
+                                />
+                                <button className="search-close-btn" onClick={() => { setShowSearch(false); setSearchQuery(''); }} style={{ background: 'none', border: 'none', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+                                    <IconClose />
+                                </button>
+                            </div>
+                        ) : (
+                            <button className="sidebar-nav-btn" onClick={() => setShowSearch(true)} style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 14px', margin: '0 6px', borderRadius: '8px', width: 'calc(100% - 12px)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
+                                <span className="nav-icon" style={{ opacity: 0.55 }}><IconSearch /></span>
+                                <span>Rechercher</span>
                             </button>
-                        </div>
-                    ) : (
-                        <button className="sidebar-nav-btn" onClick={() => setShowSearch(true)} style={{ display: 'flex', alignItems: 'center', gap: '11px', padding: '9px 14px', margin: '0 6px', borderRadius: '8px', width: 'calc(100% - 12px)', background: 'transparent', border: 'none', cursor: 'pointer' }}>
-                            <span className="nav-icon" style={{ opacity: 0.55 }}><IconSearch /></span>
-                            <span>Rechercher</span>
-                        </button>
-                    )}
-                </div>
+                        )}
+                    </div>
+                )}
 
                 <nav className="Patient-sidebar-nav">
                     <NavLink to="/Patient/chat" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaComments className="Patient-nav-icon" />
-                        <span>Chat médical</span>
+                        {!collapsed && <span>Chat médical</span>}
                     </NavLink>
                     <NavLink to="/Patient/patients" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaUsers className="Patient-nav-icon" />
-                        <span>Mes patients</span>
+                        {!collapsed && <span>Mes patients</span>}
                     </NavLink>
                     <NavLink to="/Patient/info" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaUserMd className="Patient-nav-icon" />
-                        <span>Mon profil</span>
+                        {!collapsed && <span>Mon profil</span>}
                     </NavLink>
                     <NavLink to="/Patient/history" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaHistory className="Patient-nav-icon" />
-                        <span>Historique</span>
+                        {!collapsed && <span>Historique</span>}
                     </NavLink>
                     <NavLink to="/Patient/eso" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaFileAlt className="Patient-nav-icon" />
-                        <span>Résumés ESO</span>
+                        {!collapsed && <span>Résumés ESO</span>}
                     </NavLink>
                     <NavLink to="/Patient/settings" className={({ isActive }) => isActive ? 'active' : ''}>
                         <FaCog className="Patient-nav-icon" />
-                        <span>Paramètres</span>
+                        {!collapsed && <span>Paramètres</span>}
                     </NavLink>
                 </nav>
 
-                <div className="sidebar-recents">
-                    <div className="sidebar-section-label">Récents</div>
-                    {filteredSessions.length === 0 ? (
-                        <div className="recent-item-empty">{searchQuery ? 'Aucun résultat' : 'Aucune discussion récente'}</div>
-                    ) : (
-                        filteredSessions.map(session => (
-                            <div key={session.id} className="recent-item" onClick={() => loadSession(session.id)} title={session.title}>
-                                <div className="recent-item-content">
-                                    <div className="recent-item-title">{session.title || 'Consultation'}</div>
-                                    <div className="recent-item-date">
-                                        {new Date(session.updatedAt).toLocaleDateString('fr-FR', {
-                                            day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
-                                        })}
+                {!collapsed && (
+                    <div className="sidebar-recents">
+                        <div className="sidebar-section-label">Récents</div>
+                        {filteredSessions.length === 0 ? (
+                            <div className="recent-item-empty">{searchQuery ? 'Aucun résultat' : 'Aucune discussion récente'}</div>
+                        ) : (
+                            filteredSessions.map(session => (
+                                <div key={session.id} className="recent-item" onClick={() => loadSession(session.id)} title={session.title}>
+                                    <div className="recent-item-content">
+                                        <div className="recent-item-title">{session.title || 'Consultation'}</div>
+                                        <div className="recent-item-date">
+                                            {new Date(session.updatedAt).toLocaleDateString('fr-FR', {
+                                                day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit'
+                                            })}
+                                        </div>
                                     </div>
+                                    <button className="recent-menu-btn" onClick={(e) => e.stopPropagation()}>
+                                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                                            <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
+                                        </svg>
+                                    </button>
                                 </div>
-                                <button className="recent-menu-btn" onClick={(e) => e.stopPropagation()}>
-                                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                                        <circle cx="5" cy="12" r="1" /><circle cx="12" cy="12" r="1" /><circle cx="19" cy="12" r="1" />
-                                    </svg>
-                                </button>
-                            </div>
-                        ))
-                    )}
-                </div>
+                            ))
+                        )}
+                    </div>
+                )}
             </div>
 
             <div className="Patient-sidebar-footer">
@@ -256,11 +282,11 @@ const PatientSidebar = () => {
                     <div className="user-avatar" style={{ backgroundColor: avatarColor }}>
                         {!loading ? userInitial : '...'}
                     </div>
-                    <span className="user-name">{displayName}</span>
+                    {!collapsed && <span className="user-name">{displayName}</span>}
                 </div>
                 <button onClick={handleLogout} className="Patient-logout-btn">
                     <FaSignOutAlt className="Patient-nav-icon" />
-                    Déconnexion
+                    {!collapsed && <span>Déconnexion</span>}
                 </button>
             </div>
         </aside>

@@ -15,18 +15,47 @@
     overflow: hidden;
     border-right: 1px solid rgba(0, 0, 0, 0.07);
     z-index: 100;
+    transition: width 0.2s ease;
 }
 
-/* HEADER */
-.Patient-sidebar-logo {
-    padding: 16px 14px 10px;
+.Patient-sidebar.collapsed {
+    width: 60px;
 }
 
-.Patient-sidebar-logo h2 {
+/* HEADER avec bouton collapse */
+.Patient-sidebar-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 16px 12px;
+    min-height: 60px;
+}
+
+.Patient-sidebar-header h2 {
     font-size: 1.15rem;
     margin: 0;
     font-weight: 600;
     letter-spacing: -0.02em;
+}
+
+.sidebar-collapse-btn {
+    width: 30px;
+    height: 30px;
+    border-radius: 7px;
+    border: none;
+    background: transparent;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    color: rgba(26, 25, 21, 0.45);
+    transition: background 0.15s, color 0.15s;
+    padding: 0;
+}
+
+.sidebar-collapse-btn:hover {
+    background: rgba(0, 0, 0, 0.07);
+    color: #1a1915;
 }
 
 /* NEW CHAT */
@@ -58,6 +87,7 @@
     align-items: center;
     justify-content: center;
     font-size: 0.9rem;
+    flex-shrink: 0;
 }
 
 /* SCROLLABLE AREA */
@@ -103,6 +133,7 @@
     opacity: 0.55;
     width: 18px;
     height: 18px;
+    flex-shrink: 0;
 }
 
 .Patient-sidebar-nav a:hover .Patient-nav-icon,
@@ -211,13 +242,13 @@
 }
 
 .user-avatar {
-    width: 40px;
-    height: 40px;
+    width: 36px;
+    height: 36px;
     border-radius: 50%;
     display: flex;
     align-items: center;
     justify-content: center;
-    font-size: 1.2rem;
+    font-size: 1rem;
     font-weight: 600;
     color: white;
     text-transform: uppercase;
@@ -252,6 +283,22 @@
 
 .Patient-logout-btn:hover {
     background: rgba(0, 0, 0, 0.08);
+}
+
+/* MODE COLLAPSE */
+.Patient-sidebar.collapsed .new-chat-btn span:last-child,
+.Patient-sidebar.collapsed .Patient-sidebar-nav a span,
+.Patient-sidebar.collapsed .Patient-logout-btn span:last-child {
+    display: none;
+}
+
+.Patient-sidebar.collapsed .new-chat-btn,
+.Patient-sidebar.collapsed .Patient-sidebar-nav a {
+    justify-content: center;
+}
+
+.Patient-sidebar.collapsed .plus-icon {
+    margin: 0;
 }
 
 /* Scrollbar */

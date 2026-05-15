@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { 
   FaComments, 
@@ -68,8 +69,26 @@ const IconSignOut = () => (
   </svg>
 );
 
+// Icônes collapse/expand
+const IconCollapse = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="9" y1="3" x2="9" y2="21" />
+  </svg>
+);
+
+const IconExpand = () => (
+  <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
+    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+    <rect x="3" y="3" width="18" height="18" rx="2" />
+    <line x1="15" y1="3" x2="15" y2="21" />
+  </svg>
+);
+
 const Sidebar = () => {
   const navigate = useNavigate();
+  const [collapsed, setCollapsed] = useState(false);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -78,38 +97,41 @@ const Sidebar = () => {
   };
 
   return (
-    <aside className="admin-sidebar">
-      {/* HEADER */}
+    <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
+      {/* HEADER avec bouton collapse */}
       <div className="sidebar-header">
-        <span className="sidebar-logo-title">MedAssist</span>
-        <span className="sidebar-badge">Admin</span>
+        {!collapsed && <span className="sidebar-logo-title">MedAssist</span>}
+        {!collapsed && <span className="sidebar-badge">Admin</span>}
+        <button className="sidebar-collapse-btn" onClick={() => setCollapsed(!collapsed)}>
+          {collapsed ? <IconExpand /> : <IconCollapse />}
+        </button>
       </div>
 
       {/* NAVIGATION PRINCIPALE */}
       <nav className="sidebar-nav">
         <NavLink to="/manager/chat" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconChat /></span>
-          <span>Chat médical</span>
+          {!collapsed && <span>Chat médical</span>}
         </NavLink>
 
         <NavLink to="/manager/history" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconHistory /></span>
-          <span>Historique</span>
+          {!collapsed && <span>Historique</span>}
         </NavLink>
 
         <NavLink to="/manager/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconStats /></span>
-          <span>Statistiques</span>
+          {!collapsed && <span>Statistiques</span>}
         </NavLink>
 
         <NavLink to="/manager/contacts" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconEnvelope /></span>
-          <span>Messages reçus</span>
+          {!collapsed && <span>Messages reçus</span>}
         </NavLink>
 
         <NavLink to="/manager/settings" className={({ isActive }) => (isActive ? 'active' : '')}>
           <span className="nav-icon"><IconSettings /></span>
-          <span>Paramètres</span>
+          {!collapsed && <span>Paramètres</span>}
         </NavLink>
       </nav>
 
@@ -119,7 +141,7 @@ const Sidebar = () => {
       <div className="sidebar-footer">
         <button onClick={handleLogout} className="logout-btn">
           <IconSignOut />
-          <span>Déconnexion</span>
+          {!collapsed && <span>Déconnexion</span>}
         </button>
       </div>
     </aside>
