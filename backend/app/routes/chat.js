@@ -11,7 +11,6 @@ const { escaladeUrgence } = require('../services/processMessageGroq');
 const auth = require('../middleware/auth');
 
 // ── Multer ────────────────────────────────────────────────────────────────────
-// Multer avec extension préservée pour que Python/ffmpeg reconnaisse le format
 const storage = multer.diskStorage({
     destination: 'uploads/audio/',
     filename: function(req, file, cb) {
@@ -22,12 +21,10 @@ const storage = multer.diskStorage({
 const upload = multer({ storage: storage });
 
 // ── Config Whisper local ──────────────────────────────────────────────────────
-// Dans .env ajouter :  USE_LOCAL_WHISPER=true  et  WHISPER_SERVICE_URL=http://localhost:8001
 const WHISPER_SERVICE_URL = process.env.WHISPER_SERVICE_URL || 'http://localhost:8001';
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Fonction : proxy vers le microservice Python Whisper
-// Le backend Node lit le fichier et le renvoie au service Python
 // ─────────────────────────────────────────────────────────────────────────────
 async function transcribeWithWhisperLocal(filePath, language) {
     const fileBuffer = fs.readFileSync(filePath);
@@ -44,8 +41,6 @@ async function transcribeWithWhisperLocal(filePath, language) {
     const mimeType = mimeTypes[ext] || 'audio/webm';
 
     const formData = new FormData();
-    // Le service Python attend le champ "file" (pas "audio")
-    // Forcer .wav si c'est du WAV — ffmpeg le lira sans conversion
     const filename = ext === 'wav' ? 'audio.wav' : `audio.${ext}`;
     formData.append('file', fileBuffer, {
         filename: filename,
@@ -120,9 +115,9 @@ router.get('/whisper-health', async(req, res) => {
 });
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROUTE : POST /api/chat/
+// ✅ ROUTE : POST /api/chat/ (AVEC auth !)
 // ─────────────────────────────────────────────────────────────────────────────
-router.post('/', handleChat);
+router.post('/', auth, handleChat);  // ← ICI LA CORRECTION !
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTE : POST /api/chat/reset-session
@@ -153,7 +148,7 @@ router.post('/emergency-manual', async(req, res) => {
 router.get('/history', auth, getUserHistory);
 
 // ─────────────────────────────────────────────────────────────────────────────
-// ROUTE : DELETE /api/chat/history/all  (AVANT /:id !)
+// ROUTE : DELETE /api/chat/history/all
 // ─────────────────────────────────────────────────────────────────────────────
 router.delete('/history/all', auth, async(req, res) => {
     try {

@@ -1,3 +1,4 @@
+// backend/app/controllers/chatController.js
 const { processMessage } = require('../services/nlpService');
 const ESOBuilder = require('../utils/esoBuilder');
 const Conversation = require('../models/Conversation');
@@ -40,11 +41,17 @@ const handleChat = async(req, res) => {
 
         const { message, sessionId, resetSession } = req.body;
 
+        // ✅ Récupérer l'userId du token (IMPORTANT)
         let userId = null;
 
         if (req.user && req.user.userId) {
             userId = req.user.userId;
+        } else if (req.user && req.user.id) {
+            userId = req.user.id;
         }
+
+        console.log(`👤 Utilisateur connecté: ${userId || 'anonyme'}`);
+        console.log(`📨 Message reçu: "${message?.substring(0, 50)}..."`);
 
         if (!message ||
             typeof message !== 'string' ||
@@ -210,7 +217,7 @@ const handleChat = async(req, res) => {
                 sessionData.conversationHistory.slice(-30);
         }
 
-        // ================= MONGODB =================
+        // ================= MONGODB (CORRIGÉ) =================
         try {
 
             let title = 'Consultation médicale';
@@ -227,6 +234,22 @@ const handleChat = async(req, res) => {
             } else if (message.length > 0) {
 
                 title = message.substring(0, 50);
+            }
+
+            // ✅ Vérifier si la conversation existe déjà
+            let existingConversation = await Conversation.findOne({ sessionId: id });
+            
+            // ✅ CRUCIAL : Si l'utilisateur est connecté, FORCER l'association
+            if (userId) {
+                // Si la conversation existe déjà sans userId, la mettre à jour
+                if (existingConversation && !existingConversation.userId) {
+                    console.log(`🔄 FORCAGE: Association de la conversation ${id} à l'utilisateur ${userId}`);
+                    await Conversation.updateOne(
+                        { sessionId: id },
+                        { $set: { userId: userId, tempUserId: null } }
+                    );
+                    existingConversation = await Conversation.findOne({ sessionId: id });
+                }
             }
 
             const updateData = {
@@ -253,24 +276,28 @@ const handleChat = async(req, res) => {
                 }
             };
 
+            // ✅ FORCER userId si l'utilisateur est connecté
             if (userId) {
                 updateData.$set.userId = userId;
+                updateData.$unset = { tempUserId: "" };
+                console.log(`✅ Sauvegarde AVEC userId: ${userId}`);
             } else {
                 updateData.$set.tempUserId = id;
+                console.log(`⚠️ Sauvegarde anonyme - tempUserId: ${id}`);
             }
 
-            if (isNewSession) {
+            if (isNewSession && !existingConversation) {
                 updateData.$set.createdAt = new Date();
             }
 
-            await Conversation.findOneAndUpdate({ sessionId: id },
-                updateData, {
-                    upsert: true,
-                    new: true
-                }
+            const result = await Conversation.findOneAndUpdate(
+                { sessionId: id },
+                updateData,
+                { upsert: true, new: true }
             );
 
-            console.log('✅ Sauvegarde MongoDB réussie');
+            console.log(`✅ Sauvegarde MongoDB réussie - userId final: ${result.userId || 'anonyme'}`);
+            console.log(`📊 ESO Summary sauvegardé:`, summary);
 
         } catch (dbError) {
 
@@ -406,12 +433,14 @@ const getUserHistory = async(req, res) => {
         const userId =
             req.user.userId || req.user.id;
 
+        console.log(`🔍 Récupération historique pour user: ${userId}`);
+
         const conversations =
             await Conversation.find({ userId })
             .sort({ updatedAt: -1 });
 
         console.log(
-            `📊 ${conversations.length} conversations`
+            `📊 ${conversations.length} conversations trouvées`
         );
 
         const formatted = conversations.map(conv => {
