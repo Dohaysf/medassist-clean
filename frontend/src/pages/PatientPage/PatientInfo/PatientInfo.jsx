@@ -1,13 +1,34 @@
+// frontend/src/pages/PatientPage/PatientInfo/PatientInfo.jsx
 import React, { useEffect, useState } from 'react';
 import axios from 'axios';
+import translations from '../../../translation'; // ← à adapter selon ton projet
 import './PatientInfo.css';
 
 const PatientInfo = () => {
+  const [lang, setLang] = useState(() => localStorage.getItem('language') || 'fr');
+  // Récupération sécurisée des traductions pour cette page
+  const pageTranslations = (translations[lang] || translations.fr)?.patientInfo || {};
+  // Fallback pour éviter les undefined
+  const t = (key) => pageTranslations[key] || key;
+
   const [user, setUser] = useState(null);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState(false);
   const [formData, setFormData] = useState({});
   const [saveStatus, setSaveStatus] = useState({ show: false, message: '', type: '' });
+
+  // Écoute les changements de langue
+  useEffect(() => {
+    const handleLangChange = (e) => {
+      if (e.detail && e.detail.language) {
+        setLang(e.detail.language);
+      } else if (localStorage.getItem('language')) {
+        setLang(localStorage.getItem('language'));
+      }
+    };
+    window.addEventListener('languageChange', handleLangChange);
+    return () => window.removeEventListener('languageChange', handleLangChange);
+  }, []);
 
   useEffect(() => {
     fetchUserInfo();
@@ -23,7 +44,7 @@ const PatientInfo = () => {
       setFormData(res.data);
     } catch (err) {
       console.error(err);
-      showMessage('Erreur lors du chargement des données', 'error');
+      showMessage(t('loadError') || 'Erreur lors du chargement', 'error');
     } finally {
       setLoading(false);
     }
@@ -37,7 +58,7 @@ const PatientInfo = () => {
   const handleSave = async () => {
     const token = localStorage.getItem('token');
     if (!token) {
-      showMessage('Vous devez être connecté', 'error');
+      showMessage(t('notLoggedIn') || 'Vous devez être connecté', 'error');
       return;
     }
 
@@ -49,11 +70,11 @@ const PatientInfo = () => {
       if (response.data.success) {
         setUser(response.data.user);
         setEditing(false);
-        showMessage('✅ Profil mis à jour avec succès !', 'success');
+        showMessage(t('updateSuccess') || 'Profil mis à jour !', 'success');
       }
     } catch (err) {
       console.error('Erreur save:', err);
-      showMessage(err.response?.data?.error || '❌ Erreur lors de la mise à jour', 'error');
+      showMessage(err.response?.data?.error || t('updateError') || 'Erreur lors de la mise à jour', 'error');
     }
   };
 
@@ -85,8 +106,8 @@ const PatientInfo = () => {
       <div className="info-topbar">
         <div className="topbar-left">
           <span className="topbar-icon">👤</span>
-          <h1>Mon profil</h1>
-          <span className="topbar-badge">{user?.role === 'patient' ? 'Patient' : 'Manager'}</span>
+          <h1>{t('title') || 'Mon profil'}</h1>
+          <span className="topbar-badge">{user?.role === 'patient' ? (t('patient') || 'Patient') : (t('manager') || 'Manager')}</span>
         </div>
         {!editing ? (
           <button className="edit-btn" onClick={() => setEditing(true)}>
@@ -94,7 +115,7 @@ const PatientInfo = () => {
               <path d="M17 3l4 4L7 21H3v-4L17 3z"/>
               <line x1="15" y1="5" x2="19" y2="9"/>
             </svg>
-            Modifier
+            {t('edit') || 'Modifier'}
           </button>
         ) : (
           <div className="edit-actions">
@@ -102,10 +123,10 @@ const PatientInfo = () => {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <polyline points="20 6 9 17 4 12"/>
               </svg>
-              Sauvegarder
+              {t('save') || 'Sauvegarder'}
             </button>
             <button className="cancel-btn" onClick={handleCancel}>
-              Annuler
+              {t('cancel') || 'Annuler'}
             </button>
           </div>
         )}
@@ -123,23 +144,23 @@ const PatientInfo = () => {
         <div className="stat-card">
           <div className="stat-icon">📅</div>
           <div className="stat-info">
-            <span className="stat-value">Membre depuis</span>
+            <span className="stat-value">{t('memberSince') || 'Membre depuis'}</span>
             <span className="stat-label">
-              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString('fr-FR', { month: 'long', year: 'numeric' }) : '—'}
+              {user?.createdAt ? new Date(user.createdAt).toLocaleDateString(lang === 'ar' ? 'ar-MA' : lang === 'en' ? 'en-GB' : 'fr-FR', { month: 'long', year: 'numeric' }) : '—'}
             </span>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon">📋</div>
           <div className="stat-info">
-            <span className="stat-value">Statut</span>
-            <span className="stat-label">Actif</span>
+            <span className="stat-value">{t('status') || 'Statut'}</span>
+            <span className="stat-label">{t('active') || 'Actif'}</span>
           </div>
         </div>
         <div className="stat-card">
           <div className="stat-icon">🆔</div>
           <div className="stat-info">
-            <span className="stat-value">ID Patient</span>
+            <span className="stat-value">{t('patientId') || 'ID Patient'}</span>
             <span className="stat-label">{user?._id?.slice(-8) || '—'}</span>
           </div>
         </div>
@@ -152,18 +173,18 @@ const PatientInfo = () => {
           <div className="info-section">
             <div className="section-header">
               <span className="section-icon">📝</span>
-              <h2>Informations personnelles</h2>
+              <h2>{t('personalInfo') || 'Informations personnelles'}</h2>
             </div>
 
             <div className="info-grid">
               <div className="info-field">
-                <label>Nom complet</label>
+                <label>{t('fullName') || 'Nom complet'}</label>
                 {editing ? (
                   <input 
                     name="name"
                     value={formData.name || ''} 
                     onChange={handleChange}
-                    placeholder="Votre nom complet"
+                    placeholder={t('fullNamePlaceholder') || 'Votre nom complet'}
                   />
                 ) : (
                   <p>{user?.name || '—'}</p>
@@ -171,7 +192,7 @@ const PatientInfo = () => {
               </div>
 
               <div className="info-field">
-                <label>Email</label>
+                <label>{t('email') || 'Email'}</label>
                 {editing ? (
                   <input 
                     name="email"
@@ -186,50 +207,50 @@ const PatientInfo = () => {
               </div>
 
               <div className="info-field">
-                <label>Téléphone</label>
+                <label>{t('phone') || 'Téléphone'}</label>
                 {editing ? (
                   <input 
                     name="phone"
                     value={formData.phone || ''} 
                     onChange={handleChange}
-                    placeholder="+212 6XX XXX XXX"
+                    placeholder={t('phonePlaceholder') || '+212 6XX XXX XXX'}
                   />
                 ) : (
-                  <p>{user?.phone || 'Non renseigné'}</p>
+                  <p>{user?.phone || t('notProvided') || 'Non renseigné'}</p>
                 )}
               </div>
 
               <div className="info-field">
-                <label>Âge</label>
+                <label>{t('age') || 'Âge'}</label>
                 {editing ? (
                   <input 
                     name="age"
                     type="number"
                     value={formData.age || ''} 
                     onChange={handleChange}
-                    placeholder="Votre âge"
+                    placeholder={t('agePlaceholder') || 'Votre âge'}
                   />
                 ) : (
-                  <p>{user?.age ? `${user.age} ans` : 'Non renseigné'}</p>
+                  <p>{user?.age ? `${user.age} ${t('years') || 'ans'}` : t('notProvided') || 'Non renseigné'}</p>
                 )}
               </div>
 
               <div className="info-field">
-                <label>Sexe</label>
+                <label>{t('gender') || 'Sexe'}</label>
                 {editing ? (
                   <select 
                     name="gender"
                     value={formData.gender || ''} 
                     onChange={handleChange}
                   >
-                    <option value="">Non précisé</option>
-                    <option value="homme">Homme</option>
-                    <option value="femme">Femme</option>
+                    <option value="">{t('notSpecified') || 'Non précisé'}</option>
+                    <option value="homme">{t('male') || 'Homme'}</option>
+                    <option value="femme">{t('female') || 'Femme'}</option>
                   </select>
                 ) : (
                   <p>
-                    {user?.gender === 'homme' ? 'Homme' : 
-                     user?.gender === 'femme' ? 'Femme' : 'Non renseigné'}
+                    {user?.gender === 'homme' ? (t('male') || 'Homme') : 
+                     user?.gender === 'femme' ? (t('female') || 'Femme') : (t('notSpecified') || 'Non précisé')}
                   </p>
                 )}
               </div>
@@ -242,7 +263,7 @@ const PatientInfo = () => {
           <div className="info-section">
             <div className="section-header">
               <span className="section-icon">🏥</span>
-              <h2>Antécédents médicaux</h2>
+              <h2>{t('medicalHistory') || 'Antécédents médicaux'}</h2>
             </div>
 
             <div className="medical-history">
@@ -250,17 +271,17 @@ const PatientInfo = () => {
                 <div className="history-grid">
                   <div className={`history-item ${user.medicalHistory.diabete ? 'active' : ''}`}>
                     <span className="history-icon">🩸</span>
-                    <span>Diabète</span>
+                    <span>{t('diabetes') || 'Diabète'}</span>
                     {user.medicalHistory.diabete && <span className="check">✓</span>}
                   </div>
                   <div className={`history-item ${user.medicalHistory.asthme ? 'active' : ''}`}>
                     <span className="history-icon">🌬️</span>
-                    <span>Asthme</span>
+                    <span>{t('asthma') || 'Asthme'}</span>
                     {user.medicalHistory.asthme && <span className="check">✓</span>}
                   </div>
                   <div className={`history-item ${user.medicalHistory.tension ? 'active' : ''}`}>
                     <span className="history-icon">❤️</span>
-                    <span>Hypertension</span>
+                    <span>{t('hypertension') || 'Hypertension'}</span>
                     {user.medicalHistory.tension && <span className="check">✓</span>}
                   </div>
                   {user.medicalHistory.other && (
@@ -273,14 +294,14 @@ const PatientInfo = () => {
                   {!user.medicalHistory.diabete && !user.medicalHistory.asthme && !user.medicalHistory.tension && !user.medicalHistory.other && (
                     <div className="history-item empty">
                       <span className="history-icon">✅</span>
-                      <span>Aucun antécédent déclaré</span>
+                      <span>{t('noHistory') || 'Aucun antécédent déclaré'}</span>
                     </div>
                   )}
                 </div>
               ) : (
                 <div className="history-empty">
                   <span>📭</span>
-                  <p>Aucun antécédent médical</p>
+                  <p>{t('noHistoryData') || 'Aucun antécédent médical'}</p>
                 </div>
               )}
             </div>
@@ -289,8 +310,8 @@ const PatientInfo = () => {
             <div className="advice-card">
               <div className="advice-icon">💡</div>
               <div className="advice-content">
-                <h4>Conseil de santé</h4>
-                <p>Gardez vos informations médicales à jour pour une meilleure prise en charge.</p>
+                <h4>{t('healthTipTitle') || 'Conseil de santé'}</h4>
+                <p>{t('healthTipText') || 'Gardez vos informations médicales à jour pour une meilleure prise en charge.'}</p>
               </div>
             </div>
           </div>

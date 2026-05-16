@@ -10,7 +10,7 @@ CORS(app)
 # ================= CONFIGURATION DOCKER =================
 # ⚠️ Votre Docker ChromaDB est sur le port 8001
 CHROMA_HOST = os.getenv('CHROMA_HOST', 'localhost')
-CHROMA_PORT = int(os.getenv('CHROMA_PORT', 8001))  # ← Port 8001 !
+CHROMA_PORT = int(os.getenv('CHROMA_PORT', 8000))  # ← Port 8001 !
 COLLECTION_NAME = "medical_rag_new"
 
 print(f"🔧 Connexion à ChromaDB: {CHROMA_HOST}:{CHROMA_PORT}")

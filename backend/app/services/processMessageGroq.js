@@ -13,8 +13,11 @@ function getMissing(summary) {
     return REQUIRED_FIELDS.filter(f => !summary[f]);
 }
 
+// ================= DÉTECTION LANGUE =================
 function detectLanguage(message) {
-    return /[\u0600-\u06FF]/.test(message) ? 'ar' : 'fr';
+    const arabicChars = (message.match(/[\u0600-\u06FF]/g) || []).length;
+    const totalChars = message.replace(/\s/g, '').length;
+    return arabicChars / totalChars > 0.2 ? 'ar' : 'fr';
 }
 
 // ================= ENVOI SMS URGENCE =================
@@ -41,7 +44,20 @@ async function sendEmergencySMS(esoSummary, sessionId, reason) {
         console.log("✅ SMS urgence envoyé");
         return true;
     } catch (error) {
-        console.error("❌ SMS échoué:", error.response?.data || error.message);
+        if (error.response && error.response.data) {
+
+            console.error(
+                "❌ SMS échoué:",
+                error.response.data
+            );
+
+        } else {
+
+            console.error(
+                "❌ SMS échoué:",
+                error.message
+            );
+        }
         return false;
     }
 }
@@ -58,170 +74,21 @@ async function sendToPFA(summary, sessionId) {
     }
 }
 
-// ================= ESCALADE URGENCE STANDARD =================
-async function escaladeUrgence(summary, sessionId, reason, confidence = null) {
-    console.warn(`🟠 [ESCALADE STANDARD] ${reason}`);
-    await sendEmergencySMS(summary, sessionId, reason);
-    await sendToPFA(summary, sessionId);
-    const lang = detectLanguage(JSON.stringify(summary));
-    const reply = lang === 'ar' ?
-        `⚠️ **تنبيه طبي**\n\nتم إرسال تنبيه للفريق الطبي.\n\nاتصل بالإسعاف على الرقم **141** إذا تفاقمت الحالة.` :
-        `⚠️ **Alerte médicale**\n\nUne alerte a été envoyée à l'équipe médicale.\n\nAppelez le **SAMU** au **141** si la situation s'aggrave.`;
-    return {
-        reply: reply,
-        intent: "escalade_urgence",
-        extractedInfo: summary,
-        confidence: confidence || 0
-    };
-}
-
-// ================= RÉPONSE URGENCE CRITIQUE (IMMÉDIATE) =================
-async function handleCriticalEmergency(userMessage, summary, sessionId, lang) {
-    console.log(`🔴🔴🔴 [ACTION IMMÉDIATE] URGENCE CRITIQUE DÉTECTÉE 🔴🔴🔴`);
-    console.log(`📨 Message: "${userMessage}"`);
-    
-    // 1. ENVOYER SMS D'URGENCE IMMÉDIATEMENT
-    await sendEmergencySMS(summary, sessionId, "URGENCE CRITIQUE - ACTION IMMÉDIATE REQUISE");
-    
-    // 2. ENVOYER AU PFA
-    await sendToPFA(summary, sessionId);
-    
-    // 3. RÉPONSE D'URGENCE SANS POSER DE QUESTIONS
-    const criticalResponse = lang === 'ar' ?
-        `🚨🚨 **حالة طارئة جداً - تصرف فوري** 🚨🚨
-
-هذه حالة طبية خطيرة تتطلب تدخلاً فورياً.
-
-**📞 اتصل بالإسعاف فوراً على الرقم 141**
-
-**ما يجب فعله فوراً :**
-
-1. **اتصل بالرقم 141** - أخبرهم بما حدث
-2. **لا تحرك الشخص** - إلا إذا كان في خطر إضافي
-3. **افتح المجاري التنفسية** - إذا كان الشخص فاقداً للوعي
-4. **تحقق من التنفس** - إذا كان لا يتنفس، ابدأ الإنعاش القلبي الرئوي
-
-**إذا كنت أنت المصاب :**
-- استلقِ في وضع مريح
-- لا تأكل ولا تشرب أي شيء
-- انتظر وصول الإسعاف
-
-🚨 **طلب المساعدة فوراً هو الخيار الصحيح** 🚨
-
-تم إرسال تنبيه للفريق الطبي.` :
-        `🚨🚨 **URGENCE CRITIQUE - ACTION IMMÉDIATE REQUISE** 🚨🚨
-
-Cette situation médicale est grave et nécessite une intervention immédiate.
-
-**📞 APPELEZ LE SAMU IMMÉDIATEMENT : 141**
-
-**CONDUITE À TENIR :**
-
-1. **APPELER LE 141** - Décrivez précisément la situation
-2. **NE PAS DÉPLACER LA PERSONNE** (sauf danger immédiat)
-3. **DÉGAGER LES VOIES AÉRIENNES** - Si la personne est inconsciente
-4. **VÉRIFIER LA RESPIRATION** - Si absent, commencer la RCP
-5. **RASSURER LA PERSONNE** - Restez calme et parlez-lui
-
-**Si vous êtes la personne concernée :**
-- Allongez-vous ou asseyez-vous confortablement
-- Ne mangez ni ne buvez rien
-- Attendez l'arrivée des secours
-
-🚨 **Ne perdez pas de temps - Appelez le SAMU (141) maintenant !** 🚨
-
-Une alerte a été envoyée à l'équipe médicale.`;
-    
-    return {
-        reply: criticalResponse,
-        intent: "critical_emergency",
-        extractedInfo: summary,
-        confidence: 1.0,
-        escalated: true
-    };
-}
-
-// ================= DÉTECTION URGENCE TRÈS GRAVE =================
-function isCriticalEmergency(message, summary) {
-    // MOTS-CLÉS D'URGENCE CRITIQUE (déclenchement immédiat)
-    const criticalKeywords = [
-        // Français
-        'crise cardiaque', 'infarctus', 'arrêt cardiaque', 'arrêt respiratoire',
-        'ne respire plus', 'ne respire pas', 'étouffement', 'inconscience', 'évanouissement',
-        'perte de connaissance', 'coma', 'hémorragie grave', 'saignement abondant',
-        'traumatisme crânien', 'accident grave', 'chute haute', 'noyade',
-        'difficulté à respirer', 'ne peut plus respirer', 'suffocation',
-        
-        // Arabe
-        'سكتة قلبية', 'نوبة قلبية', 'توقف القلب', 'توقف التنفس',
-        'لا يتنفس', 'اختناق', 'فقدان الوعي', 'غيبوبة', 'نزيف حاد',
-        'إصابة خطيرة', 'حادث خطير', 'صعوبة في التنفس'
-    ];
-    
-    const msg = message.toLowerCase();
-    const sym = (summary.symptom || '').toLowerCase();
-    const bp = (summary.bodyPart || '').toLowerCase();
-    
-    // Vérifier les mots-clés critiques
-    for (const kw of criticalKeywords) {
-        if (msg.includes(kw) || sym.includes(kw)) {
-            console.log(`🚨🚨🚨 [URGENCE CRITIQUE] Mot-clé détecté: "${kw}"`);
-            return true;
-        }
-    }
-    
-    // Douleur thoracique + symptômes associés = URGENCE CRITIQUE
-    if ((sym.includes('douleur') || msg.includes('douleur')) && 
-        (bp.includes('poitrine') || msg.includes('poitrine') || bp.includes('thorax'))) {
-        
-        const associatedSymptoms = [
-            'essoufflement', 'sueur', 'nausée', 'vomissement', 
-            'bras gauche', 'mâchoire', 'dos', 'fatigue intense', 'vertige'
-        ];
-        
-        for (const symp of associatedSymptoms) {
-            if (msg.includes(symp)) {
-                console.log(`🚨🚨🚨 [URGENCE CRITIQUE] Douleur thoracique + ${symp}`);
-                return true;
-            }
-        }
-    }
-    
-    return false;
-}
-
-// ================= VÉRIFICATION URGENCE STANDARD =================
-function checkEmergency(message, summary) {
-    const urgentKeywords = [
-        'urgence', 'secours', 'samu', 'hémorragie', 'hemorragie', 'perte de sang',
-        'دعاء', 'مساعدة', 'الإسعاف', 'نزيف', 'saignement',
-        'douleur thoracique', 'étouffement', 'inconscience', 'évanouissement',
-        'crise cardiaque', 'infarctus', 'arrêt respiratoire', 'coma',
-        'difficulté à respirer'
-    ];
-    const msg = message.toLowerCase();
-    const sym = (summary.symptom || '').toLowerCase();
-    return urgentKeywords.some(kw => msg.includes(kw) || sym.includes(kw));
-}
-
 // ================= RECHERCHE DANS LA RAG =================
 async function searchRAG(query, language = 'fr') {
     console.log(`🔍 [RAG] Recherche: "${query}"`);
-    
     try {
         const response = await axios.post('http://localhost:5001/search', {
             query: query,
             language: language,
             top_k: 3
         });
-        
         const results = response.data.results || [];
         if (results.length > 0) {
-            console.log(`✅ [RAG] ${results.length} résultat(s) - Score: ${results[0].similarity}`);
+            console.log(`✅ [RAG] ${results.length} résultat(s) - Score: ${results[0].similarity?.toFixed(3)}`);
         } else {
-            console.log(`⚠️ [RAG] Aucun résultat trouvé`);
+            console.log(`⚠️ [RAG] Aucun résultat pertinent`);
         }
-        
         return results;
     } catch (error) {
         console.error("❌ [RAG] Erreur:", error.message);
@@ -229,217 +96,347 @@ async function searchRAG(query, language = 'fr') {
     }
 }
 
-// ================= GÉNÉRER RÉPONSE MÉDICALE INTELLIGENTE =================
-async function generateMedicalResponse(userMessage, ragResults, summary, language) {
-    const hasRelevantRAG = ragResults.length > 0 && ragResults[0].similarity > 0.5;
-    
-    let prompt = "";
-    
-    if (hasRelevantRAG) {
-        const relevantDoc = ragResults[0];
-        const ragContent = relevantDoc.content;
-        const ragScore = Math.round(relevantDoc.similarity * 100);
-        
-        prompt = `Tu es un assistant médical expert. Voici une question d'un patient et des informations médicales pertinentes trouvées dans notre base.
+// ================= EXTRACTION INTELLIGENTE PAR LLM =================
+// On laisse le LLM comprendre le sens plutôt que de chercher des mots-clés
+async function extractWithGroq(message, currentSummary, conversationHistory = []) {
+    const historyText = conversationHistory.slice(-6).map(m =>
+        `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
+    ).join('\n');
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏥 INFORMATIONS MÉDICALES TROUVÉES (Pertinence: ${ragScore}%)
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+    const prompt = `Tu es un assistant médical expert en extraction d'informations cliniques.
 
-${ragContent}
+HISTORIQUE DE LA CONVERSATION (pour le contexte) :
+${historyText || "(Début de conversation)"}
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-👤 PATIENT
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Message: "${userMessage}"
-Symptôme: ${summary.symptom || "À déterminer"}
-Localisation: ${summary.bodyPart || "Non spécifiée"}
-Âge: ${summary.age || "Non spécifié"} ans
+NOUVEAU MESSAGE DU PATIENT : "${message}"
 
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-CONSIGNES :
-1. UTILISE OBLIGATOIREMENT les informations médicales ci-dessus
-2. ADAPTE ces informations au patient
-3. Donne des conseils pratiques
-4. Langue: ${language === 'ar' ? 'Arabe' : 'Français'}
+DONNÉES DÉJÀ COLLECTÉES :
+${JSON.stringify(currentSummary, null, 2)}
 
-RÉPONSE :`;
-    } else {
-        prompt = `Tu es un assistant médical expert.
+Ta tâche : extraire ou mettre à jour les informations cliniques à partir du nouveau message.
+Tiens compte de l'historique pour comprendre le contexte (ex: si on a demandé l'âge et le patient répond "32 ans", c'est l'âge).
 
-MESSAGE PATIENT: "${userMessage}"
-Symptôme: ${summary.symptom || "Non spécifié"}
-Localisation: ${summary.bodyPart || "Non spécifiée"}
-Âge: ${summary.age || "Non spécifié"} ans
+RÈGLES D'EXTRACTION :
+- "ça fait mal" ou "j'ai mal" → symptom = "douleur"
+- "depuis ce matin", "depuis 2 jours" → duration
+- "j'ai 45 ans", "mon fils a 8 ans", "pour ma mère" → age (extraire le chiffre)
+- "je suis à Casablanca", "chez moi", "à l'école" → patientLocation
+- "à la tête", "le ventre", "mon bras droit" → bodyPart
+- Réponds UNIQUEMENT avec un JSON valide, sans texte avant ni après.
+- Pour chaque champ : mets la valeur extraite, ou null si absent dans ce message.
+- Ne supprime PAS les champs déjà collectés — retourne null uniquement si vraiment absent du message actuel.
 
-Consignes :
-1. Réponds directement à la question
-2. Si c'est une urgence → commence par "🚨 URGENCE :"
-3. Pose des questions pertinentes si besoin
-4. Langue: ${language === 'ar' ? 'Arabe' : 'Français'}
-
-RÉPONSE :`;
-    }
-
-    try {
-        const response = await callGroq(prompt);
-        return response.trim();
-    } catch (error) {
-        console.error("❌ Erreur Groq:", error.message);
-        return language === 'ar' ? 
-            "Je n'ai pas pu traiter votre demande." :
-            "Je n'ai pas pu traiter votre demande.";
-    }
-}
-
-// ================= EXTRACTION GROQ =================
-async function extractWithGroq(message, currentSummary) {
-    const prompt = `
-Extrais les infos cliniques du message au format JSON.
-Message: "${message}"
-
-Réponds STRICTEMENT en JSON:
+FORMAT JSON ATTENDU :
 {
-  "symptom": "symptôme ou null",
-  "bodyPart": "partie du corps ou null",
-  "duration": "durée ou null",
-  "age": "nombre ou null",
+  "symptom": "description claire du symptôme principal ou null",
+  "bodyPart": "partie du corps concernée ou null",
+  "duration": "durée exprimée naturellement ou null",
+  "age": "nombre entier ou null",
   "patientLocation": "lieu ou null",
-  "intensity": "nombre 1-10 ou null"
+  "intensity": "nombre de 1 à 10 ou null",
+  "additionalSymptoms": ["liste de symptômes secondaires"] ou [],
+  "medicalHistory": "antécédents mentionnés ou null",
+  "currentMedication": "médicaments mentionnés ou null",
+  "emergencyLevel": "critique|urgent|modere|faible — ton évaluation basée sur le contexte complet"
 }`;
 
     try {
         const response = await callGroq(prompt);
         const jsonMatch = response.match(/\{[\s\S]*\}/);
         if (jsonMatch) {
-            return JSON.parse(jsonMatch[0]);
+            const parsed = JSON.parse(jsonMatch[0]);
+            console.log(`🧠 [EXTRACTION LLM]`, JSON.stringify(parsed));
+            return parsed;
         }
         return {};
     } catch (e) {
-        console.error("❌ Erreur extraction:", e.message);
+        console.error("❌ Erreur extraction LLM:", e.message);
         return {};
     }
 }
 
-// ================= QUESTION =================
-async function askQuestion(field, lang = 'fr') {
-    const questions = {
-        fr: {
-            symptom: "Quel est le problème principal ?",
-            bodyPart: "Où exactement ?",
-            duration: "Depuis quand ?",
-            age: "Quel âge a le patient ?",
-            patientLocation: "Où se trouve le patient ?"
-        },
-        ar: {
-            symptom: "ما هي المشكلة الرئيسية؟",
-            bodyPart: "أين بالضبط؟",
-            duration: "منذ متى؟",
-            age: "كم عمر المريض؟",
-            patientLocation: "أين يوجد المريض؟"
+// ================= ÉVALUATION URGENCE PAR LLM =================
+// Plus de listes de mots-clés — le LLM évalue la gravité en contexte
+async function evaluateEmergencyByLLM(userMessage, summary, conversationHistory = []) {
+    const historyText = conversationHistory.slice(-4).map(m =>
+        `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
+    ).join('\n');
+
+    const prompt = `Tu es un médecin urgentiste expérimenté. Évalue la gravité de cette situation.
+
+CONTEXTE DE LA CONVERSATION :
+${historyText || "(Premier message)"}
+
+MESSAGE ACTUEL : "${userMessage}"
+
+INFORMATIONS COLLECTÉES :
+- Symptôme: ${summary.symptom || 'non précisé'}
+- Localisation: ${summary.bodyPart || 'non précisée'}
+- Durée: ${summary.duration || 'non précisée'}
+- Âge: ${summary.age || 'non précisé'}
+- Intensité: ${summary.intensity || 'non précisée'}/10
+
+Réponds UNIQUEMENT avec un JSON valide :
+{
+  "level": "critique|urgent|modere|faible",
+  "reasoning": "explication courte en 1 phrase",
+  "needsImmediateAction": true|false,
+  "recommendedAction": "appeler le 141|consultation urgente|consultation normale|conseil médical"
+}
+
+NIVEAUX :
+- critique: danger de mort immédiat (AVC, infarctus, détresse respiratoire sévère, hémorragie massive, perte de conscience, traumatisme grave...)
+- urgent: nécessite une consultation dans les heures qui suivent
+- modere: consultation dans la journée ou le lendemain
+- faible: conseil médical suffit`;
+
+    try {
+        const response = await callGroq(prompt);
+        const jsonMatch = response.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            console.log(`⚠️ [URGENCE LLM] Niveau: ${result.level} | ${result.reasoning}`);
+            return result;
         }
+        return { level: 'modere', needsImmediateAction: false, recommendedAction: 'conseil médical' };
+    } catch (e) {
+        console.error("❌ Erreur évaluation urgence:", e.message);
+        return { level: 'modere', needsImmediateAction: false };
+    }
+}
+
+// ================= RÉPONSE URGENCE CRITIQUE =================
+async function handleCriticalEmergency(userMessage, summary, sessionId, lang, reasoning = '') {
+    console.log(`🔴🔴🔴 [ACTION IMMÉDIATE] URGENCE CRITIQUE 🔴🔴🔴`);
+
+    await sendEmergencySMS(summary, sessionId, `URGENCE CRITIQUE - ${reasoning}`);
+    await sendToPFA(summary, sessionId);
+
+    const criticalResponse = lang === 'ar' ?
+        `🚨🚨 **حالة طارئة جداً - تصرف فوري** 🚨🚨
+
+هذه حالة طبية خطيرة تتطلب تدخلاً فورياً.
+
+**📞 اتصل بالإسعاف فوراً على الرقم 141**
+
+**ما يجب فعله الآن :**
+1. **اتصل بالرقم 141** — أخبرهم بما يحدث بالضبط
+2. **لا تحرك الشخص** — إلا إذا كان في خطر إضافي
+3. **تحقق من التنفس** — إذا توقف، ابدأ الإنعاش القلبي الرئوي
+4. **افتح المجاري التنفسية** — إذا كان فاقداً للوعي
+5. **ابقَ بالقرب منه** — حتى وصول الإسعاف
+
+تم إرسال تنبيه للفريق الطبي. 🚨` :
+        `🚨🚨 **URGENCE CRITIQUE — ACTION IMMÉDIATE** 🚨🚨
+
+**📞 APPELEZ LE SAMU IMMÉDIATEMENT : 141**
+
+**À faire maintenant :**
+1. **Appelez le 141** — décrivez précisément la situation
+2. **Ne déplacez pas la personne** (sauf danger immédiat)
+3. **Vérifiez la respiration** — si absente, commencez la RCP
+4. **Dégagez les voies aériennes** si inconsciente
+5. **Restez auprès d'elle** jusqu'à l'arrivée des secours
+
+Une alerte a été envoyée à l'équipe médicale. 🚨`;
+
+    return {
+        reply: criticalResponse,
+        intent: "critical_emergency",
+        extractedInfo: summary,
+        severity: "critique",
+        escalated: true
     };
-    return questions[lang][field] || questions.fr[field];
+}
+
+// ================= ESCALADE URGENCE STANDARD =================
+async function escaladeUrgence(summary, sessionId, reasoning, lang) {
+    console.warn(`🟠 [ESCALADE URGENTE] ${reasoning}`);
+    await sendEmergencySMS(summary, sessionId, reasoning);
+    await sendToPFA(summary, sessionId);
+
+    const reply = lang === 'ar' ?
+        `⚠️ **تنبيه طبي**\n\nتم إرسال تنبيه للفريق الطبي.\n\nاتصل بالإسعاف على الرقم **141** إذا تفاقمت الحالة.` :
+        `⚠️ **Alerte médicale**\n\nUne alerte a été envoyée à l'équipe médicale.\n\nAppelez le **SAMU** au **141** si la situation s'aggrave.`;
+
+    return {
+        reply,
+        intent: "escalade_urgence",
+        extractedInfo: summary,
+        severity: "urgent",
+        escalated: true
+    };
+}
+
+// ================= GÉNÉRATION RÉPONSE MÉDICALE INTELLIGENTE =================
+async function generateSmartResponse(userMessage, ragResults, summary, conversationHistory, emergencyEval, lang, missingFields) {
+    const historyText = conversationHistory.slice(-8).map(m =>
+        `${m.role === 'user' ? 'Patient' : 'Médecin IA'}: ${m.content}`
+    ).join('\n');
+
+    const ragContext = ragResults.length > 0 && ragResults[0].similarity > 0.45 ?
+        `\n\nINFORMATIONS MÉDICALES PERTINENTES (pertinence: ${Math.round(ragResults[0].similarity * 100)}%) :\n${ragResults[0].content}` :
+        '';
+
+    const collectedInfo = Object.entries(summary)
+        .filter(([k, v]) => v && !k.startsWith('_'))
+        .map(([k, v]) => `- ${k}: ${v}`)
+        .join('\n');
+
+    const nextQuestion = missingFields.length > 0 ? missingFields[0] : null;
+    const questionGuide = nextQuestion ? `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle, pas robotique.` : '';
+
+    const prompt = `Tu es un médecin assistant bienveillant et expert. Tu as une conversation médicale en cours.
+
+HISTORIQUE :
+${historyText || "(Premier échange)"}
+
+DERNIER MESSAGE DU PATIENT : "${userMessage}"
+
+INFORMATIONS DÉJÀ COLLECTÉES :
+${collectedInfo || "(aucune encore)"}
+
+ÉVALUATION MÉDICALE :
+- Niveau d'urgence: ${emergencyEval.level || 'non évalué'}
+- Analyse: ${emergencyEval.reasoning || ''}
+- Action recommandée: ${emergencyEval.recommendedAction || ''}
+${ragContext}
+
+CONSIGNES DE RÉPONSE :
+1. Réponds DIRECTEMENT au message du patient — comprends ce qu'il dit vraiment
+2. Sois empathique, humain, et professionnel
+3. Si le patient exprime de la douleur, de l'inquiétude ou du stress : reconnais-le d'abord
+4. Utilise les informations RAG si pertinentes, en les adaptant au contexte du patient
+5. Ne répète PAS les infos déjà dites dans l'historique
+6. ${questionGuide || "Donne tes recommandations médicales basées sur les informations collectées."}
+7. Langue de réponse: ${lang === 'ar' ? 'Arabe (dialecte marocain compréhensible)' : 'Français naturel et clair'}
+8. Format: texte naturel, utilise des **gras** pour les points importants, pas de listes à puces sauf si vraiment utile
+9. Longueur: concis mais complet — max 4-5 lignes sauf si c'est une urgence
+
+RÉPONSE :`;
+
+    try {
+        const response = await callGroq(prompt);
+        return response.trim();
+    } catch (error) {
+        console.error("❌ Erreur génération réponse:", error.message);
+        return lang === 'ar' ?
+            "عذراً، لم أتمكن من معالجة طلبك. هل يمكنك إعادة المحاولة؟" :
+            "Désolé, je n'ai pas pu traiter votre demande. Pouvez-vous réessayer ?";
+    }
 }
 
 // ================= PROCESSUS PRINCIPAL =================
-async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null) {
+async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null, conversationHistory = []) {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`📨 [MESSAGE] "${userMessage}"`);
+    console.log(`📊 [RÉSUMÉ ACTUEL]`, JSON.stringify(currentSummary));
     console.log(`${'='.repeat(60)}`);
 
     const lang = detectLanguage(userMessage);
-    
-    // ✅ 1. URGENCE CRITIQUE (priorité ABSOLUE)
-    if (isCriticalEmergency(userMessage, currentSummary)) {
-        console.log("🔴🔴🔴 [URGENCE CRITIQUE] Déclenchement immédiat!");
-        return await handleCriticalEmergency(userMessage, currentSummary, sessionId, lang);
-    }
-    
-    // ✅ 2. URGENCE STANDARD
-    if (checkEmergency(userMessage, currentSummary)) {
-        console.log("🟠 [URGENCE STANDARD] Niveau d'alerte");
-        
-        // Vérifier si on a les infos essentielles
-        if (!currentSummary.age || !currentSummary.symptom) {
-            const reply = lang === 'ar' ?
-                `⚠️ **حالة طارئة**\n\nسأطرح عليك أسئلة سريعة.\n\nما هو عمر المريض؟` :
-                `⚠️ **Situation d'urgence**\n\nJe vais vous poser rapidement quelques questions.\n\nQuel âge a le patient ?`;
-            return {
-                reply: reply,
-                extractedInfo: {},
-                intent: "emergency_collect",
-                severity: "critique"
-            };
+    console.log(`🌐 [LANGUE] ${lang}`);
+
+    // ✅ 1. EXTRACTION INTELLIGENTE PAR LLM (comprend le contexte, pas de mots-clés)
+    console.log("\n🧠 [EXTRACTION] Analyse sémantique...");
+    const extracted = await extractWithGroq(userMessage, currentSummary, conversationHistory);
+
+    // Fusionner les infos extraites avec l'existant (ne pas écraser avec null)
+    const updatedSummary = {...currentSummary };
+    for (const [key, value] of Object.entries(extracted)) {
+        if (value !== null && value !== undefined && value !== '' &&
+            !['additionalSymptoms', 'medicalHistory', 'currentMedication', 'emergencyLevel'].includes(key)) {
+            updatedSummary[key] = value;
         }
-        
-        return await escaladeUrgence(currentSummary, sessionId, "Urgence standard", 0.9);
     }
-    
-    // ✅ 3. RECHERCHE RAG
-    console.log("\n🔍 [RAG] Recherche...");
-    const ragResults = await searchRAG(userMessage, lang);
-    
-    // ✅ 4. RÉPONSE MÉDICALE
-    console.log("\n💬 [GROQ] Génération réponse...");
-    const medicalResponse = await generateMedicalResponse(userMessage, ragResults, currentSummary, lang);
-    
-    // ✅ 5. EXTRACTION DES INFOS
-    let extracted = await extractWithGroq(userMessage, currentSummary);
-    
-    // ✅ 6. MISE À JOUR
-    const updatedSummary = {
-        ...currentSummary,
-        ...Object.fromEntries(
-            Object.entries(extracted).filter(([_, v]) => v !== null && v !== "" && v !== undefined)
-        )
-    };
+    // Enrichir avec les champs étendus
+    if (
+        extracted.additionalSymptoms &&
+        extracted.additionalSymptoms.length > 0
+    ) {
+        updatedSummary.additionalSymptoms =
+            extracted.additionalSymptoms;
+    }
+    if (extracted.medicalHistory) updatedSummary.medicalHistory = extracted.medicalHistory;
+    if (extracted.currentMedication) updatedSummary.currentMedication = extracted.currentMedication;
     delete updatedSummary._complete;
-    console.log(`📊 [RÉSUMÉ]`, JSON.stringify(updatedSummary));
 
-    // ✅ 7. SÉVÉRITÉ
-    let severity = evaluateSeverity(updatedSummary);
-    if (updatedSummary.symptom && 
-        (updatedSummary.symptom.includes('hémorragie') || 
-         updatedSummary.symptom.includes('نزيف') || 
-         updatedSummary.symptom.includes('douleur thoracique'))) {
-        severity = 'critique';
+    console.log(`📊 [RÉSUMÉ MIS À JOUR]`, JSON.stringify(updatedSummary));
+
+    // ✅ 2. ÉVALUATION URGENCE PAR LLM (intelligence contextuelle)
+    console.log("\n⚠️ [URGENCE] Évaluation intelligente...");
+    const emergencyEval = await evaluateEmergencyByLLM(userMessage, updatedSummary, conversationHistory);
+
+    // ✅ 3. URGENCE CRITIQUE → ACTION IMMÉDIATE
+    if (emergencyEval.level === 'critique' && emergencyEval.needsImmediateAction) {
+        return await handleCriticalEmergency(
+            userMessage, updatedSummary, sessionId, lang, emergencyEval.reasoning
+        );
     }
-    console.log(`⚠️ [SÉVÉRITÉ] ${severity}`);
 
+    // ✅ 4. URGENCE STANDARD → ESCALADE APRÈS COLLECTE MINIMALE
+    if (emergencyEval.level === 'urgent' && emergencyEval.needsImmediateAction) {
+        // Si on a les infos minimales, escalader
+        if (updatedSummary.symptom && updatedSummary.age) {
+            return await escaladeUrgence(updatedSummary, sessionId, emergencyEval.reasoning, lang);
+        }
+        // Sinon, collecter en urgence
+        const urgentCollect = lang === 'ar' ?
+            `⚠️ **وضع يستدعي الانتباه**\n\n${emergencyEval.reasoning}\n\nسأساعدك بسرعة. ما هو عمر المريض؟` :
+            `⚠️ **Situation nécessitant attention**\n\n${emergencyEval.reasoning}\n\nJe vais vous aider rapidement. Quel est l'âge du patient ?`;
+        return {
+            reply: urgentCollect,
+            extractedInfo: extracted,
+            intent: "urgent_collect",
+            severity: "urgent",
+            updatedSummary
+        };
+    }
+
+    // ✅ 5. RECHERCHE RAG
+    console.log("\n🔍 [RAG] Recherche...");
+    const searchQuery = updatedSummary.symptom ?
+        `${updatedSummary.symptom} ${updatedSummary.bodyPart || ''} ${userMessage}`.trim() :
+        userMessage;
+    const ragResults = await searchRAG(searchQuery, lang);
+
+    // ✅ 6. CHAMPS MANQUANTS
     const missing = getMissing(updatedSummary);
     console.log(`📋 [MANQUANTS] ${missing.length > 0 ? missing.join(', ') : 'Aucun'}`);
 
-    // ✅ 8. COLLECTE COMPLÈTE
+    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE
+    console.log("\n💬 [GROQ] Génération réponse intelligente...");
+    const medicalResponse = await generateSmartResponse(
+        userMessage, ragResults, updatedSummary, conversationHistory,
+        emergencyEval, lang, missing
+    );
+
+    // ✅ 8. COLLECTE COMPLÈTE → ENVOYER AU PFA
     if (missing.length === 0) {
-        console.log(`✅ [COMPLET] Envoi au PFA...`);
+        console.log(`✅ [COMPLET] Toutes les infos collectées — envoi au PFA`);
         await sendToPFA(updatedSummary, sessionId);
-        
-        const completionReply = lang === 'ar' ?
-            `✅ **تم جمع المعلومات**\n\n📋 الأعراض: ${updatedSummary.symptom}\n📍 الموقع: ${updatedSummary.bodyPart || 'غير محدد'}\n⏱️ المدة: ${updatedSummary.duration}\n👤 العمر: ${updatedSummary.age} سنة\n\n🚨 المستوى: ${severity}\n\n${medicalResponse}` :
-            `✅ **Informations complètes**\n\n📋 Symptôme: ${updatedSummary.symptom}\n📍 Localisation: ${updatedSummary.bodyPart || 'Non spécifiée'}\n⏱️ Durée: ${updatedSummary.duration}\n👤 Âge: ${updatedSummary.age} ans\n\n🚨 Urgence: ${severity}\n\n${medicalResponse}`;
-        
+
+        const severity = evaluateSeverity(updatedSummary);
+        const completionPrefix = lang === 'ar' ?
+            `✅ **تم جمع المعلومات الكاملة**\n\n` :
+            `✅ **Dossier complet**\n\n`;
+
         return {
-            reply: completionReply,
+            reply: completionPrefix + medicalResponse,
             extractedInfo: extracted,
             intent: "complete",
             severity,
             esoSummary: updatedSummary,
-            updatedSummary: { ...updatedSummary, _complete: true },
+            updatedSummary: {...updatedSummary, _complete: true },
             ragUsed: ragResults.length > 0
         };
     }
 
-    // ✅ 9. QUESTION SUIVANTE
-    const nextField = missing[0];
-    const missingQuestion = await askQuestion(nextField, lang);
-    const finalReply = `${medicalResponse}\n\n${missingQuestion}`;
-
+    // ✅ 9. CONTINUER LA COLLECTE NATURELLEMENT
     return {
-        reply: finalReply,
+        reply: medicalResponse,
         extractedInfo: extracted,
         intent: "collect",
-        severity,
+        severity: emergencyEval.level,
         updatedSummary,
         ragUsed: ragResults.length > 0,
         missingFields: missing
