@@ -4,7 +4,7 @@ import hashlib
 from sentence_transformers import SentenceTransformer
 
 print("=" * 60)
-print("🚀 INITIALISATION CHROMADB")
+print("🚀 INITIALISATION CHROMADB (MULTILINGUE)")
 print("=" * 60)
 
 # Connexion
@@ -13,7 +13,7 @@ client = chromadb.HttpClient(host="localhost", port=8001)
 
 # Supprimer ancienne collection
 try:
-    client.delete_collection("medical_rag")
+    client.delete_collection("medical_rag_new")
     print("🔄 Ancienne collection supprimée")
 except:
     print("ℹ️ Aucune ancienne collection")
@@ -21,10 +21,10 @@ except:
 # Créer nouvelle collection
 print("\n📁 Création de la collection...")
 collection = client.create_collection(
-    name="medical_rag",
+    name="medical_rag_new",
     metadata={"hnsw:space": "cosine"}
 )
-print("✅ Collection medical_rag créée")
+print("✅ Collection medical_rag_new créée")
 
 # Charger les données
 print("\n📖 Chargement des données...")
@@ -32,10 +32,11 @@ with open("data/rag_knowledge_base.json", "r", encoding="utf-8") as f:
     rag_data = json.load(f)
 print(f"✅ {len(rag_data)} entrées chargées")
 
-# Charger le modèle
-print("\n🧠 Chargement du modèle...")
-model = SentenceTransformer("paraphrase-MiniLM-L3-v2")
-print(f"✅ Modèle chargé - Dimension: {model.get_sentence_embedding_dimension()}")
+# Charger le modèle MULTILINGUE
+print("\n🧠 Chargement du modèle (distiluse-base-multilingual-cased-v2)...")
+print("   🌍 Support: Français, Arabe, Anglais")
+model = SentenceTransformer("distiluse-base-multilingual-cased-v2")
+print(f"✅ Modèle chargé - Dimension: {model.get_embedding_dimension()}")
 
 # Préparer les documents
 print("\n📝 Préparation des documents...")
@@ -46,7 +47,11 @@ ids = []
 for key, data in rag_data.items():
     text = key.replace("_", " ")
     if data.get("mots_cles"):
-        text += " " + " ".join(data["mots_cles"][:3])
+        text += " " + " ".join(data["mots_cles"])
+    if data.get("mots_cles_french"):
+        text += " " + " ".join(data["mots_cles_french"])
+    if data.get("mots_cles_english"):
+        text += " " + " ".join(data["mots_cles_english"])
     documents.append(text)
     metadatas.append({
         "key": key,
@@ -71,7 +76,7 @@ collection.add(
 
 print("\n" + "=" * 60)
 print(f"✅ TERMINÉ ! {len(documents)} documents ajoutés")
-print(f"📁 Collection: medical_rag")
+print(f"📁 Collection: medical_rag_new")
 
 # Tester
 print("\n🔍 Test de recherche...")

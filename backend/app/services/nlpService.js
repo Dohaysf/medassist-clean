@@ -152,8 +152,9 @@ const extractInfo = (message, summary = {}) => {
   return info;
 };
 
-// ================= ÉVALUATION SÉVÉRITÉ AMÉLIORÉE =================
-const evaluateSeverity = (summary) => {
+// ================= ÉVALUATION SÉVÉRITÉ AVEC ANTÉCÉDENTS =================
+// ✅ MODIFICATION : Ajout du paramètre userMedicalHistory
+const evaluateSeverity = (summary, userMedicalHistory = null) => {
   const symptom = (summary.symptom || '').toLowerCase();
   const bodyPart = (summary.bodyPart || '').toLowerCase();
   const intensity = Number(summary.intensity);
@@ -161,7 +162,49 @@ const evaluateSeverity = (summary) => {
 
   console.log(`🔍 [SEVERITY] Symptôme: ${symptom}, BodyPart: ${bodyPart}, Intensity: ${intensity}`);
 
-  // ✅ CAS CRITIQUES - Priorité absolue
+  // ✅ Vérifier si le patient a des facteurs de risque (antécédents)
+  let hasRiskFactor = false;
+  let riskDetails = [];
+  
+  if (userMedicalHistory) {
+    if (userMedicalHistory.diabete) {
+      hasRiskFactor = true;
+      riskDetails.push('diabète');
+    }
+    if (userMedicalHistory.asthme) {
+      hasRiskFactor = true;
+      riskDetails.push('asthme');
+    }
+    if (userMedicalHistory.tension) {
+      hasRiskFactor = true;
+      riskDetails.push('hypertension');
+    }
+    
+    if (hasRiskFactor) {
+      console.log(`⚠️ [SEVERITY] Patient à risque (${riskDetails.join(', ')}) → majoration de la sévérité`);
+    }
+  }
+
+  // ✅ CAS CRITIQUES avec antécédents - Priorité absolue
+  // Asthme + problème respiratoire = CRITIQUE immédiat
+  if ((symptom.includes('dyspnee') || symptom.includes('respir') || bodyPart.includes('poumon')) && userMedicalHistory?.asthme) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Asthmatique + problème respiratoire`);
+    return 'critique';
+  }
+  
+  // Hypertension + douleur thoracique = CRITIQUE immédiat
+  if ((symptom.includes('cardiaque') || (symptom.includes('douleur') && bodyPart.includes('poitrine'))) && userMedicalHistory?.tension) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Hypertendu + douleur thoracique`);
+    return 'critique';
+  }
+  
+  // Diabète + fièvre = CRITIQUE (risque d'infection)
+  if ((symptom.includes('fievre') || symptom.includes('fièvre')) && userMedicalHistory?.diabete) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Diabétique + fièvre`);
+    return 'critique';
+  }
+
+  // ✅ CAS CRITIQUES standards
   if (symptom.includes('dyspnee') || symptom.includes('respir') || 
       bodyPart.includes('poumon') || symptom.includes('souffle')) {
     console.log(`⚠️ [SEVERITY] CRITIQUE - Problème respiratoire`);
@@ -184,11 +227,17 @@ const evaluateSeverity = (summary) => {
     return 'critique';
   }
 
-  // Cas critiques standards
+  // ✅ Cas critiques standards
   if (symptom === 'cardiaque') return 'critique';
   if (symptom === 'douleur' && bodyPart === 'poitrine') return 'critique';
   if (symptom === 'dyspnee') return 'critique';
   if (symptom === 'saignement') return 'critique';
+  
+  // ✅ Avec facteurs de risque, abaisser le seuil de criticité
+  if (hasRiskFactor && intensity >= 5) {
+    console.log(`⚠️ [SEVERITY] CRITIQUE - Patient à risque + intensité ${intensity}`);
+    return 'critique';
+  }
   
   // Combinaison intensité + durée
   if (intensity >= 8) return 'critique';

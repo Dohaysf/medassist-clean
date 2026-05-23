@@ -97,17 +97,39 @@ async function searchRAG(query, language = 'fr') {
 }
 
 // ================= EXTRACTION INTELLIGENTE PAR LLM =================
-// On laisse le LLM comprendre le sens plutôt que de chercher des mots-clés
-async function extractWithGroq(message, currentSummary, conversationHistory = []) {
+// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
+async function extractWithGroq(message, currentSummary, conversationHistory = [], userMedicalHistory = null, userAge = null, userGender = null) {
     const historyText = conversationHistory.slice(-6).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
     ).join('\n');
+
+    // ✅ Ajout des antécédents dans le prompt
+    let antecedentsSection = '';
+    if (userMedicalHistory) {
+        const conditions = [];
+        if (userMedicalHistory.diabete) conditions.push('- Diabète');
+        if (userMedicalHistory.asthme) conditions.push('- Asthme');
+        if (userMedicalHistory.tension) conditions.push('- Hypertension');
+        if (userMedicalHistory.other) conditions.push(`- Autre: ${userMedicalHistory.other}`);
+        
+        if (conditions.length > 0) {
+            antecedentsSection = `
+INFORMATIONS CONNUES SUR LE PATIENT (issues de son profil) :
+- Âge: ${userAge || 'Non renseigné'} ans
+- Sexe: ${userGender === 'homme' ? 'Homme' : userGender === 'femme' ? 'Femme' : 'Non renseigné'}
+- Antécédents médicaux:
+${conditions.join('\n')}
+
+`;
+        }
+    }
 
     const prompt = `Tu es un assistant médical expert en extraction d'informations cliniques.
 
 HISTORIQUE DE LA CONVERSATION (pour le contexte) :
 ${historyText || "(Début de conversation)"}
 
+${antecedentsSection}
 NOUVEAU MESSAGE DU PATIENT : "${message}"
 
 DONNÉES DÉJÀ COLLECTÉES :
@@ -115,6 +137,7 @@ ${JSON.stringify(currentSummary, null, 2)}
 
 Ta tâche : extraire ou mettre à jour les informations cliniques à partir du nouveau message.
 Tiens compte de l'historique pour comprendre le contexte (ex: si on a demandé l'âge et le patient répond "32 ans", c'est l'âge).
+TIENS ÉGALEMENT COMPTE DES ANTÉCÉDENTS MÉDICAUX mentionnés ci-dessus pour mieux comprendre la situation.
 
 RÈGLES D'EXTRACTION :
 - "ça fait mal" ou "j'ai mal" → symptom = "douleur"
@@ -156,11 +179,24 @@ FORMAT JSON ATTENDU :
 }
 
 // ================= ÉVALUATION URGENCE PAR LLM =================
-// Plus de listes de mots-clés — le LLM évalue la gravité en contexte
-async function evaluateEmergencyByLLM(userMessage, summary, conversationHistory = []) {
+// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory
+async function evaluateEmergencyByLLM(userMessage, summary, conversationHistory = [], userMedicalHistory = null, userAge = null) {
     const historyText = conversationHistory.slice(-4).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
     ).join('\n');
+
+    // ✅ Ajout des antécédents dans le prompt
+    let antecedentsInfo = '';
+    if (userMedicalHistory) {
+        const conditions = [];
+        if (userMedicalHistory.diabete) conditions.push('diabète');
+        if (userMedicalHistory.asthme) conditions.push('asthme');
+        if (userMedicalHistory.tension) conditions.push('hypertension');
+        
+        if (conditions.length > 0) {
+            antecedentsInfo = `\nANTÉCÉDENTS CONNUS : ${conditions.join(', ')}. Âge: ${userAge || 'non renseigné'} ans.`;
+        }
+    }
 
     const prompt = `Tu es un médecin urgentiste expérimenté. Évalue la gravité de cette situation.
 
@@ -175,6 +211,7 @@ INFORMATIONS COLLECTÉES :
 - Durée: ${summary.duration || 'non précisée'}
 - Âge: ${summary.age || 'non précisé'}
 - Intensité: ${summary.intensity || 'non précisée'}/10
+${antecedentsInfo}
 
 Réponds UNIQUEMENT avec un JSON valide :
 {
@@ -188,7 +225,9 @@ NIVEAUX :
 - critique: danger de mort immédiat (AVC, infarctus, détresse respiratoire sévère, hémorragie massive, perte de conscience, traumatisme grave...)
 - urgent: nécessite une consultation dans les heures qui suivent
 - modere: consultation dans la journée ou le lendemain
-- faible: conseil médical suffit`;
+- faible: conseil médical suffit
+
+⚠️ IMPORTANT : Tiens compte des ANTÉCÉDENTS MÉDICAUX (diabète, asthme, hypertension) pour évaluer la gravité. Un patient asthmatique avec une difficulté respiratoire est plus critique qu'un patient sans antécédents.`;
 
     try {
         const response = await callGroq(prompt);
@@ -269,7 +308,8 @@ async function escaladeUrgence(summary, sessionId, reasoning, lang) {
 }
 
 // ================= GÉNÉRATION RÉPONSE MÉDICALE INTELLIGENTE =================
-async function generateSmartResponse(userMessage, ragResults, summary, conversationHistory, emergencyEval, lang, missingFields) {
+// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
+async function generateSmartResponse(userMessage, ragResults, summary, conversationHistory, emergencyEval, lang, missingFields, userMedicalHistory = null, userAge = null, userGender = null) {
     const historyText = conversationHistory.slice(-8).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Médecin IA'}: ${m.content}`
     ).join('\n');
@@ -282,6 +322,28 @@ async function generateSmartResponse(userMessage, ragResults, summary, conversat
         .filter(([k, v]) => v && !k.startsWith('_'))
         .map(([k, v]) => `- ${k}: ${v}`)
         .join('\n');
+
+    // ✅ Ajout des antécédents dans le prompt
+    let antecedentsInfo = '';
+    if (userMedicalHistory) {
+        const conditions = [];
+        if (userMedicalHistory.diabete) conditions.push('🏥 Diabète');
+        if (userMedicalHistory.asthme) conditions.push('🏥 Asthme');
+        if (userMedicalHistory.tension) conditions.push('🏥 Hypertension');
+        if (userMedicalHistory.other) conditions.push(`🏥 Autre: ${userMedicalHistory.other}`);
+        
+        if (conditions.length > 0) {
+            antecedentsInfo = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+🏥 **ANTÉCÉDENTS MÉDICAUX DU PATIENT (de son profil)**
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${conditions.join('\n')}
+👤 Âge: ${userAge || 'Non renseigné'} ans
+⚥ Sexe: ${userGender === 'homme' ? 'Homme' : userGender === 'femme' ? 'Femme' : 'Non renseigné'}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+`;
+        }
+    }
 
     const nextQuestion = missingFields.length > 0 ? missingFields[0] : null;
     const questionGuide = nextQuestion ? `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle, pas robotique.` : '';
@@ -296,6 +358,7 @@ DERNIER MESSAGE DU PATIENT : "${userMessage}"
 INFORMATIONS DÉJÀ COLLECTÉES :
 ${collectedInfo || "(aucune encore)"}
 
+${antecedentsInfo}
 ÉVALUATION MÉDICALE :
 - Niveau d'urgence: ${emergencyEval.level || 'non évalué'}
 - Analyse: ${emergencyEval.reasoning || ''}
@@ -307,11 +370,12 @@ CONSIGNES DE RÉPONSE :
 2. Sois empathique, humain, et professionnel
 3. Si le patient exprime de la douleur, de l'inquiétude ou du stress : reconnais-le d'abord
 4. Utilise les informations RAG si pertinentes, en les adaptant au contexte du patient
-5. Ne répète PAS les infos déjà dites dans l'historique
-6. ${questionGuide || "Donne tes recommandations médicales basées sur les informations collectées."}
-7. Langue de réponse: ${lang === 'ar' ? 'Arabe (dialecte marocain compréhensible)' : 'Français naturel et clair'}
-8. Format: texte naturel, utilise des **gras** pour les points importants, pas de listes à puces sauf si vraiment utile
-9. Longueur: concis mais complet — max 4-5 lignes sauf si c'est une urgence
+5. **TIENS COMPTE DES ANTÉCÉDENTS MÉDICAUX** du patient (diabète, asthme, hypertension) pour adapter tes conseils
+6. Ne répète PAS les infos déjà dites dans l'historique
+7. ${questionGuide || "Donne tes recommandations médicales basées sur les informations collectées."}
+8. Langue de réponse: ${lang === 'ar' ? 'Arabe (dialecte marocain compréhensible)' : 'Français naturel et clair'}
+9. Format: texte naturel, utilise des **gras** pour les points importants, pas de listes à puces sauf si vraiment utile
+10. Longueur: concis mais complet — max 4-5 lignes sauf si c'est une urgence
 
 RÉPONSE :`;
 
@@ -327,18 +391,30 @@ RÉPONSE :`;
 }
 
 // ================= PROCESSUS PRINCIPAL =================
-async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null, conversationHistory = []) {
+// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
+async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null, conversationHistory = [], userMedicalHistory = null, userAge = null, userGender = null) {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`📨 [MESSAGE] "${userMessage}"`);
     console.log(`📊 [RÉSUMÉ ACTUEL]`, JSON.stringify(currentSummary));
     console.log(`${'='.repeat(60)}`);
 
+    // ✅ Affichage des antécédents si disponibles
+    if (userMedicalHistory) {
+        console.log(`🏥 [ANTÉCÉDENTS] Patient connu:`);
+        if (userMedicalHistory.diabete) console.log(`   - Diabète`);
+        if (userMedicalHistory.asthme) console.log(`   - Asthme`);
+        if (userMedicalHistory.tension) console.log(`   - Hypertension`);
+        if (userMedicalHistory.other) console.log(`   - Autre: ${userMedicalHistory.other}`);
+        if (userAge) console.log(`   - Âge: ${userAge} ans`);
+        if (userGender) console.log(`   - Sexe: ${userGender}`);
+    }
+
     const lang = detectLanguage(userMessage);
     console.log(`🌐 [LANGUE] ${lang}`);
 
-    // ✅ 1. EXTRACTION INTELLIGENTE PAR LLM (comprend le contexte, pas de mots-clés)
+    // ✅ 1. EXTRACTION INTELLIGENTE PAR LLM (avec antécédents)
     console.log("\n🧠 [EXTRACTION] Analyse sémantique...");
-    const extracted = await extractWithGroq(userMessage, currentSummary, conversationHistory);
+    const extracted = await extractWithGroq(userMessage, currentSummary, conversationHistory, userMedicalHistory, userAge, userGender);
 
     // Fusionner les infos extraites avec l'existant (ne pas écraser avec null)
     const updatedSummary = {...currentSummary };
@@ -362,9 +438,9 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
 
     console.log(`📊 [RÉSUMÉ MIS À JOUR]`, JSON.stringify(updatedSummary));
 
-    // ✅ 2. ÉVALUATION URGENCE PAR LLM (intelligence contextuelle)
+    // ✅ 2. ÉVALUATION URGENCE PAR LLM (avec antécédents)
     console.log("\n⚠️ [URGENCE] Évaluation intelligente...");
-    const emergencyEval = await evaluateEmergencyByLLM(userMessage, updatedSummary, conversationHistory);
+    const emergencyEval = await evaluateEmergencyByLLM(userMessage, updatedSummary, conversationHistory, userMedicalHistory, userAge);
 
     // ✅ 3. URGENCE CRITIQUE → ACTION IMMÉDIATE
     if (emergencyEval.level === 'critique' && emergencyEval.needsImmediateAction) {
@@ -403,11 +479,11 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
     const missing = getMissing(updatedSummary);
     console.log(`📋 [MANQUANTS] ${missing.length > 0 ? missing.join(', ') : 'Aucun'}`);
 
-    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE
+    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE (avec antécédents)
     console.log("\n💬 [GROQ] Génération réponse intelligente...");
     const medicalResponse = await generateSmartResponse(
         userMessage, ragResults, updatedSummary, conversationHistory,
-        emergencyEval, lang, missing
+        emergencyEval, lang, missing, userMedicalHistory, userAge, userGender
     );
 
     // ✅ 8. COLLECTE COMPLÈTE → ENVOYER AU PFA
@@ -415,7 +491,8 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
         console.log(`✅ [COMPLET] Toutes les infos collectées — envoi au PFA`);
         await sendToPFA(updatedSummary, sessionId);
 
-        const severity = evaluateSeverity(updatedSummary);
+        // ✅ Utiliser evaluateSeverity avec antécédents
+        const severity = evaluateSeverity(updatedSummary, userMedicalHistory);
         const completionPrefix = lang === 'ar' ?
             `✅ **تم جمع المعلومات الكاملة**\n\n` :
             `✅ **Dossier complet**\n\n`;

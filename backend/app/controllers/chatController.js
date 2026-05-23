@@ -3,6 +3,7 @@ const { processMessage } = require('../services/nlpService');
 const ESOBuilder = require('../utils/esoBuilder');
 const Conversation = require('../models/Conversation');
 const { processMessageGroq } = require('../services/processMessageGroq');
+const User = require('../models/User'); // ✅ AJOUT : Importer le modèle User
 
 console.log('✅ processMessageGroq importée');
 
@@ -41,13 +42,32 @@ const handleChat = async(req, res) => {
 
         const { message, sessionId, resetSession } = req.body;
 
-        // ✅ Récupérer l'userId du token (IMPORTANT)
+        // ✅ Récupérer l'userId du token et les antécédents
         let userId = null;
+        let userMedicalHistory = null;
+        let userAge = null;
+        let userGender = null;
 
         if (req.user && req.user.userId) {
             userId = req.user.userId;
         } else if (req.user && req.user.id) {
             userId = req.user.id;
+        }
+
+        // ✅ Récupérer les antécédents médicaux de l'utilisateur
+        if (userId) {
+            try {
+                const user = await User.findById(userId).select('medicalHistory age gender');
+                if (user) {
+                    userMedicalHistory = user.medicalHistory;
+                    userAge = user.age;
+                    userGender = user.gender;
+                    console.log(`🏥 Antécédents du patient:`, userMedicalHistory);
+                    console.log(`👤 Âge: ${userAge}, Sexe: ${userGender}`);
+                }
+            } catch (err) {
+                console.error('❌ Erreur récupération antécédents:', err.message);
+            }
         }
 
         console.log(`👤 Utilisateur connecté: ${userId || 'anonyme'}`);
@@ -142,11 +162,15 @@ const handleChat = async(req, res) => {
 
         if (useGroq) {
 
+            // ✅ MODIFICATION : Passer les antécédents à processMessageGroq
             result = await processMessageGroq(
                 message,
                 builder.getSummary(),
                 id,
-                conversationHistory
+                conversationHistory,
+                userMedicalHistory,  // ✅ AJOUT : Antécédents
+                userAge,             // ✅ AJOUT : Âge
+                userGender           // ✅ AJOUT : Sexe
             );
 
         } else {
