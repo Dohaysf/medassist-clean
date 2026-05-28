@@ -26,7 +26,7 @@ print(f"✅ {len(rag_data)} entrées chargées")
 
 # 2. Connexion à ChromaDB
 print("\n🔌 Connexion à ChromaDB...")
-client = chromadb.HttpClient(host="localhost", port=8001)
+client = chromadb.HttpClient(host="localhost", port=8000)
 
 # 3. Supprimer l'ancienne collection si elle existe
 try:
@@ -57,28 +57,36 @@ metadatas = []
 ids = []
 
 for idx, (key, data) in enumerate(rag_data.items()):
-    # Créer un texte de recherche à partir des données
-    search_text = key.replace('_', ' ')
+    # ✅ Utiliser le conseil + mots-clés comme texte de recherche
+    parts = []
+    
+    # Ajouter le conseil (contenu principal)
+    if data.get('conseil'):
+        parts.append(data['conseil'][:300])
     
     # Ajouter les mots-clés
     if data.get('mots_cles'):
-        search_text += " " + " ".join(data['mots_cles'])
+        parts.append(" ".join(data['mots_cles']))
     if data.get('mots_cles_french'):
-        search_text += " " + " ".join(data['mots_cles_french'])
-    if data.get('mots_cles_english'):
-        search_text += " " + " ".join(data['mots_cles_english'])
+        parts.append(" ".join(data['mots_cles_french']))
+    
+    # Fallback sur la clé si rien d'autre
+    if not parts:
+        parts.append(key.replace('_', ' '))
+    
+    search_text = " ".join(parts)
     
     documents.append(search_text)
     metadatas.append({
         "key": key,
         "urgence": str(data.get('urgence', False)),
-        "priority": data.get('priority', 4)
+        "priority": data.get('priority', 4),
+        "source": data.get('source', 'base_medicale')  # ✅ Ajouter la source
     })
     ids.append(f"rag_{hashlib.md5(key.encode()).hexdigest()[:16]}")
     
     if (idx + 1) % 20 == 0:
         print(f"   ⏳ {idx + 1}/{len(rag_data)} préparés")
-
 # 7. Générer les embeddings
 print("\n🧮 Génération des embeddings...")
 embeddings = model.encode(documents, show_progress_bar=True).tolist()

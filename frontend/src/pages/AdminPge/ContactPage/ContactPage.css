@@ -14,7 +14,9 @@
     --danger: #d9534f;
 }
 
+
 /* Layout principal */
+
 .contact-page {
     display: flex;
     flex-direction: column;
@@ -24,7 +26,9 @@
     overflow: hidden;
 }
 
-/* Topbar style chat */
+
+/* Topbar */
+
 .contact-topbar {
     padding: 13px 24px;
     background: var(--bg);
@@ -51,7 +55,9 @@
     border: 1px solid var(--border-input);
 }
 
+
 /* Zone de recherche */
+
 .contact-search-area {
     padding: 16px 24px 8px;
     background: var(--bg);
@@ -93,7 +99,9 @@
     color: var(--text-muted);
 }
 
+
 /* Layout 2 colonnes */
+
 .contact-layout {
     flex: 1;
     display: flex;
@@ -102,7 +110,9 @@
     overflow: hidden;
 }
 
-/* Liste des messages (colonne de gauche) */
+
+/* Liste (colonne gauche) */
+
 .messages-list {
     flex: 1.2;
     min-width: 360px;
@@ -115,6 +125,9 @@
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04);
 }
 
+
+/* ── Header liste avec badge ── */
+
 .list-header {
     padding: 14px 20px;
     background: var(--bg);
@@ -122,7 +135,67 @@
     font-weight: 500;
     color: var(--text-primary);
     font-size: 0.85rem;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
 }
+
+
+/* Badge rouge "N nouveaux" */
+
+.unread-badge {
+    display: inline-flex;
+    align-items: center;
+    padding: 0.2rem 0.65rem;
+    background: #ef4444;
+    color: #ffffff;
+    border-radius: 20px;
+    font-size: 0.72rem;
+    font-weight: 700;
+    white-space: nowrap;
+    animation: badgePulse 2s ease-in-out infinite;
+}
+
+@keyframes badgePulse {
+    0%,
+    100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.8;
+        transform: scale(0.97);
+    }
+}
+
+
+/* Point bleu sur le nom */
+
+.unread-dot {
+    display: inline-block;
+    width: 7px;
+    height: 7px;
+    background: #3b82f6;
+    border-radius: 50%;
+    margin-left: 6px;
+    flex-shrink: 0;
+}
+
+
+/* Carte non lue */
+
+.message-card.unread {
+    border-left: 3px solid #3b82f6;
+    background: rgba(59, 130, 246, 0.03);
+}
+
+.message-card.unread .message-name {
+    font-weight: 700;
+}
+
+
+/* ── Cartes ── */
 
 .messages-list-scroll {
     flex: 1;
@@ -211,7 +284,9 @@
     background: rgba(217, 83, 79, 0.1);
 }
 
-/* Détail du message (colonne de droite) */
+
+/* Détail (colonne droite) */
+
 .message-detail {
     flex: 1;
     min-width: 360px;
@@ -291,14 +366,18 @@
     border: 1px solid var(--border);
 }
 
+
 /* États vides */
-.no-messages, .no-selection {
+
+.no-messages,
+.no-selection {
     text-align: center;
     padding: 60px 24px;
     color: var(--text-muted);
 }
 
-.no-selection span, .no-messages {
+.no-selection span,
+.no-messages {
     font-size: 3rem;
     opacity: 0.5;
     display: block;
@@ -316,7 +395,9 @@
     font-size: 0.8rem;
 }
 
+
 /* Loading */
+
 .contact-loading {
     display: flex;
     align-items: center;
@@ -330,7 +411,9 @@
     color: var(--text-muted);
 }
 
+
 /* Scrollbar */
+
 .messages-list-scroll::-webkit-scrollbar,
 .message-detail::-webkit-scrollbar {
     width: 4px;
@@ -347,22 +430,21 @@
     border-radius: 4px;
 }
 
+
 /* Responsive */
+
 @media (max-width: 900px) {
     .contact-layout {
         flex-direction: column;
         padding: 16px;
     }
-    
     .messages-list {
         min-width: auto;
         max-height: 400px;
     }
-    
     .message-detail {
         min-width: auto;
     }
-    
     .detail-header {
         flex-direction: column;
         align-items: flex-start;
@@ -374,19 +456,15 @@
     .contact-topbar {
         padding: 13px 16px;
     }
-    
     .contact-search-area {
         padding: 12px 16px;
     }
-    
     .contact-layout {
         padding: 12px 16px 16px;
     }
-    
     .message-card {
         padding: 12px 16px;
     }
-    
     .message-detail {
         padding: 16px;
     }

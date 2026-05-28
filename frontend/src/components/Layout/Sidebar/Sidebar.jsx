@@ -1,25 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { NavLink, useNavigate } from 'react-router-dom';
-import { 
-  FaComments, 
-  FaHistory, 
-  FaChartBar, 
-  FaCog, 
-  FaSignOutAlt, 
-  FaEnvelope,
-  FaUsers
-} from 'react-icons/fa';
+import axios from 'axios';
 import './Sidebar.css';
 
-/* ── SVG Icons outline (style Claude) ── */
-const IconHome = () => (
-  <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
-    stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
-    <path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/>
-    <polyline points="9 22 9 12 15 12 15 22"/>
-  </svg>
-);
-
+/* ── SVG Icons ───────────────────────────────────────────── */
 const IconChat = () => (
   <svg width="17" height="17" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -69,7 +53,6 @@ const IconSignOut = () => (
   </svg>
 );
 
-// Icônes collapse/expand
 const IconCollapse = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none"
     stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
@@ -86,9 +69,43 @@ const IconExpand = () => (
   </svg>
 );
 
+/* ── Composant ───────────────────────────────────────────── */
 const Sidebar = () => {
   const navigate = useNavigate();
   const [collapsed, setCollapsed] = useState(false);
+  const [unreadCount, setUnreadCount] = useState(0);
+
+  // Fetch le nombre de messages non lus — avec logs de diagnostic
+  const fetchUnreadCount = async () => {
+    try {
+      const token = localStorage.getItem('token');
+      const res = await axios.get('http://localhost:5000/api/admin/contacts', {
+        headers: { Authorization: `Bearer ${token}` }
+      });
+      console.log('📬 contacts:', res.data.map(m => ({ name: m.name, read: m.read })));
+      const count = res.data.filter(m => !m.read).length;
+      console.log('🔴 unread count:', count);
+      setUnreadCount(count);
+    } catch (err) {
+      console.error('Erreur fetch unread:', err);
+    }
+  };
+
+  useEffect(() => {
+    fetchUnreadCount();
+    const interval = setInterval(fetchUnreadCount, 30000);
+    return () => clearInterval(interval);
+  }, []);
+
+  // Écoute quand ContactPage marque un message comme lu
+  useEffect(() => {
+    const handleContactRead = () => {
+      console.log('✅ contactRead event reçu → refetch');
+      fetchUnreadCount();
+    };
+    window.addEventListener('contactRead', handleContactRead);
+    return () => window.removeEventListener('contactRead', handleContactRead);
+  }, []);
 
   const handleLogout = () => {
     localStorage.removeItem('token');
@@ -98,7 +115,8 @@ const Sidebar = () => {
 
   return (
     <aside className={`admin-sidebar ${collapsed ? 'collapsed' : ''}`}>
-      {/* HEADER avec bouton collapse */}
+
+      {/* Header */}
       <div className="sidebar-header">
         {!collapsed && <span className="sidebar-logo-title">MedAssist</span>}
         {!collapsed && <span className="sidebar-badge">Admin</span>}
@@ -107,29 +125,35 @@ const Sidebar = () => {
         </button>
       </div>
 
-      {/* NAVIGATION PRINCIPALE */}
+      {/* Navigation */}
       <nav className="sidebar-nav">
-        <NavLink to="/manager/chat" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/manager/chat" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="nav-icon"><IconChat /></span>
           {!collapsed && <span>Chat médical</span>}
         </NavLink>
 
-        <NavLink to="/manager/history" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/manager/history" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="nav-icon"><IconHistory /></span>
           {!collapsed && <span>Historique</span>}
         </NavLink>
 
-        <NavLink to="/manager/dashboard" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/manager/dashboard" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="nav-icon"><IconStats /></span>
           {!collapsed && <span>Statistiques</span>}
         </NavLink>
 
-        <NavLink to="/manager/contacts" className={({ isActive }) => (isActive ? 'active' : '')}>
+        {/* Messages reçus — badge non lus */}
+        <NavLink to="/manager/contacts" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="nav-icon"><IconEnvelope /></span>
           {!collapsed && <span>Messages reçus</span>}
+          {unreadCount > 0 && (
+            <span className={`nav-unread-badge ${collapsed ? 'badge-collapsed' : ''}`}>
+              {unreadCount > 99 ? '99+' : unreadCount}
+            </span>
+          )}
         </NavLink>
 
-        <NavLink to="/manager/settings" className={({ isActive }) => (isActive ? 'active' : '')}>
+        <NavLink to="/manager/settings" className={({ isActive }) => isActive ? 'active' : ''}>
           <span className="nav-icon"><IconSettings /></span>
           {!collapsed && <span>Paramètres</span>}
         </NavLink>
@@ -137,7 +161,7 @@ const Sidebar = () => {
 
       <div className="sidebar-divider" />
 
-      {/* FOOTER */}
+      {/* Footer */}
       <div className="sidebar-footer">
         <button onClick={handleLogout} className="logout-btn">
           <IconSignOut />

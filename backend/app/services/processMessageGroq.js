@@ -13,6 +13,14 @@ function getMissing(summary) {
     return REQUIRED_FIELDS.filter(f => !summary[f]);
 }
 
+// ================= MAPPING SOURCES OFFICIELLES =================
+const SOURCE_LABELS = {
+    'MinSante_Maroc': 'Ministère de la Santé Maroc',
+    'CroixRouge_ICRC': 'Croix-Rouge Internationale (CICR)',
+    'IFRC': 'Fédération Internationale Croix-Rouge (IFRC)',
+    'WHO': 'Organisation Mondiale de la Santé (OMS)',
+};
+
 // ================= DÉTECTION LANGUE =================
 function detectLanguage(message) {
     const arabicChars = (message.match(/[\u0600-\u06FF]/g) || []).length;
@@ -45,18 +53,9 @@ async function sendEmergencySMS(esoSummary, sessionId, reason) {
         return true;
     } catch (error) {
         if (error.response && error.response.data) {
-
-            console.error(
-                "❌ SMS échoué:",
-                error.response.data
-            );
-
+            console.error("❌ SMS échoué:", error.response.data);
         } else {
-
-            console.error(
-                "❌ SMS échoué:",
-                error.message
-            );
+            console.error("❌ SMS échoué:", error.message);
         }
         return false;
     }
@@ -96,14 +95,32 @@ async function searchRAG(query, language = 'fr') {
     }
 }
 
+// ================= HELPER : RÉCUPÉRER PROTOCOLE RAG =================
+async function getProtocoleFromRAG(summary, lang) {
+    try {
+        const ragResults = await searchRAG(
+            `${summary.symptom || ''} ${summary.bodyPart || ''} urgence protocole`.trim(),
+            lang
+        );
+        if (ragResults.length > 0 && ragResults[0].similarity > 0.3) {
+            const sourceLabel = SOURCE_LABELS[ragResults[0].source] || null;
+            if (sourceLabel) {
+                console.log(`📋 [PROTOCOLE] Source: ${sourceLabel}`);
+                return { content: ragResults[0].content, sourceLabel };
+            }
+        }
+    } catch (e) {
+        console.error("❌ RAG protocole:", e.message);
+    }
+    return null;
+}
+
 // ================= EXTRACTION INTELLIGENTE PAR LLM =================
-// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
 async function extractWithGroq(message, currentSummary, conversationHistory = [], userMedicalHistory = null, userAge = null, userGender = null) {
     const historyText = conversationHistory.slice(-6).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
     ).join('\n');
 
-    // ✅ Ajout des antécédents dans le prompt
     let antecedentsSection = '';
     if (userMedicalHistory) {
         const conditions = [];
@@ -111,7 +128,7 @@ async function extractWithGroq(message, currentSummary, conversationHistory = []
         if (userMedicalHistory.asthme) conditions.push('- Asthme');
         if (userMedicalHistory.tension) conditions.push('- Hypertension');
         if (userMedicalHistory.other) conditions.push(`- Autre: ${userMedicalHistory.other}`);
-        
+
         if (conditions.length > 0) {
             antecedentsSection = `
 INFORMATIONS CONNUES SUR LE PATIENT (issues de son profil) :
@@ -179,20 +196,18 @@ FORMAT JSON ATTENDU :
 }
 
 // ================= ÉVALUATION URGENCE PAR LLM =================
-// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory
 async function evaluateEmergencyByLLM(userMessage, summary, conversationHistory = [], userMedicalHistory = null, userAge = null) {
     const historyText = conversationHistory.slice(-4).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Assistant'}: ${m.content}`
     ).join('\n');
 
-    // ✅ Ajout des antécédents dans le prompt
     let antecedentsInfo = '';
     if (userMedicalHistory) {
         const conditions = [];
         if (userMedicalHistory.diabete) conditions.push('diabète');
         if (userMedicalHistory.asthme) conditions.push('asthme');
         if (userMedicalHistory.tension) conditions.push('hypertension');
-        
+
         if (conditions.length > 0) {
             antecedentsInfo = `\nANTÉCÉDENTS CONNUS : ${conditions.join(', ')}. Âge: ${userAge || 'non renseigné'} ans.`;
         }
@@ -251,6 +266,14 @@ async function handleCriticalEmergency(userMessage, summary, sessionId, lang, re
     await sendEmergencySMS(summary, sessionId, `URGENCE CRITIQUE - ${reasoning}`);
     await sendToPFA(summary, sessionId);
 
+    // ✅ Récupérer le protocole officiel
+    const protocole = await getProtocoleFromRAG(summary, lang);
+    const protocoleText = protocole ?
+        (lang === 'ar' ?
+            `\n\n📋 **وفق بروتوكول ${protocole.sourceLabel} :**\n${protocole.content}` :
+            `\n\n📋 **Selon le protocole ${protocole.sourceLabel} :**\n${protocole.content}`) :
+        '';
+
     const criticalResponse = lang === 'ar' ?
         `🚨🚨 **حالة طارئة جداً - تصرف فوري** 🚨🚨
 
@@ -265,7 +288,7 @@ async function handleCriticalEmergency(userMessage, summary, sessionId, lang, re
 4. **افتح المجاري التنفسية** — إذا كان فاقداً للوعي
 5. **ابقَ بالقرب منه** — حتى وصول الإسعاف
 
-تم إرسال تنبيه للفريق الطبي. 🚨` :
+تم إرسال تنبيه للفريق الطبي. 🚨${protocoleText}` :
         `🚨🚨 **URGENCE CRITIQUE — ACTION IMMÉDIATE** 🚨🚨
 
 **📞 APPELEZ LE SAMU IMMÉDIATEMENT : 141**
@@ -277,7 +300,7 @@ async function handleCriticalEmergency(userMessage, summary, sessionId, lang, re
 4. **Dégagez les voies aériennes** si inconsciente
 5. **Restez auprès d'elle** jusqu'à l'arrivée des secours
 
-Une alerte a été envoyée à l'équipe médicale. 🚨`;
+Une alerte a été envoyée à l'équipe médicale. 🚨${protocoleText}`;
 
     return {
         reply: criticalResponse,
@@ -294,9 +317,17 @@ async function escaladeUrgence(summary, sessionId, reasoning, lang) {
     await sendEmergencySMS(summary, sessionId, reasoning);
     await sendToPFA(summary, sessionId);
 
+    // ✅ Récupérer le protocole officiel
+    const protocole = await getProtocoleFromRAG(summary, lang);
+    const protocoleText = protocole ?
+        (lang === 'ar' ?
+            `\n\n📋 **وفق بروتوكول ${protocole.sourceLabel} :**\n${protocole.content}` :
+            `\n\n📋 **Selon le protocole ${protocole.sourceLabel} :**\n${protocole.content}`) :
+        '';
+
     const reply = lang === 'ar' ?
-        `⚠️ **تنبيه طبي**\n\nتم إرسال تنبيه للفريق الطبي.\n\nاتصل بالإسعاف على الرقم **141** إذا تفاقمت الحالة.` :
-        `⚠️ **Alerte médicale**\n\nUne alerte a été envoyée à l'équipe médicale.\n\nAppelez le **SAMU** au **141** si la situation s'aggrave.`;
+        `⚠️ **تنبيه طبي**\n\nتم إرسال تنبيه للفريق الطبي.\n\nاتصل بالإسعاف على الرقم **141** إذا تفاقمت الحالة.${protocoleText}` :
+        `⚠️ **Alerte médicale**\n\nUne alerte a été envoyée à l'équipe médicale.\n\nAppelez le **SAMU** au **141** si la situation s'aggrave.${protocoleText}`;
 
     return {
         reply,
@@ -308,22 +339,48 @@ async function escaladeUrgence(summary, sessionId, reasoning, lang) {
 }
 
 // ================= GÉNÉRATION RÉPONSE MÉDICALE INTELLIGENTE =================
-// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
 async function generateSmartResponse(userMessage, ragResults, summary, conversationHistory, emergencyEval, lang, missingFields, userMedicalHistory = null, userAge = null, userGender = null) {
     const historyText = conversationHistory.slice(-8).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Médecin IA'}: ${m.content}`
     ).join('\n');
 
-    const ragContext = ragResults.length > 0 && ragResults[0].similarity > 0.45 ?
-        `\n\nINFORMATIONS MÉDICALES PERTINENTES (pertinence: ${Math.round(ragResults[0].similarity * 100)}%) :\n${ragResults[0].content}` :
-        '';
+    // ✅ Construction du contexte RAG avec citation obligatoire de source officielle
+    let ragContext = '';
+    if (ragResults.length > 0 && ragResults[0].similarity > 0.3) {
+        const topResult = ragResults[0];
+        const sourceLabel = SOURCE_LABELS[topResult.source] || null;
+
+        const sourceInstruction = sourceLabel ?
+            `⚠️ INSTRUCTION OBLIGATOIRE : Tu DOIS commencer ta réponse médicale par une citation de cette source avec : "Selon le protocole ${sourceLabel}..." ou "${sourceLabel} recommande que..."` :
+            '';
+
+        ragContext = `
+
+PROTOCOLE MÉDICAL PERTINENT (similarité: ${Math.round(topResult.similarity * 100)}%) :
+Source officielle: ${sourceLabel || topResult.source || 'Base médicale'}
+Contenu du protocole: ${topResult.content}
+${sourceInstruction}`;
+
+        // ✅ Protocole complémentaire si source différente disponible
+        if (ragResults.length > 1 && ragResults[1].similarity > 0.3) {
+            const secondResult = ragResults[1];
+            const secondLabel = SOURCE_LABELS[secondResult.source] || null;
+            if (secondLabel && secondResult.source !== topResult.source) {
+                ragContext += `
+
+PROTOCOLE COMPLÉMENTAIRE :
+Source: ${secondLabel}
+Contenu: ${secondResult.content}
+⚠️ Tu peux également mentionner cette source complémentaire si pertinente.`;
+            }
+        }
+    }
 
     const collectedInfo = Object.entries(summary)
         .filter(([k, v]) => v && !k.startsWith('_'))
         .map(([k, v]) => `- ${k}: ${v}`)
         .join('\n');
 
-    // ✅ Ajout des antécédents dans le prompt
     let antecedentsInfo = '';
     if (userMedicalHistory) {
         const conditions = [];
@@ -331,7 +388,7 @@ async function generateSmartResponse(userMessage, ragResults, summary, conversat
         if (userMedicalHistory.asthme) conditions.push('🏥 Asthme');
         if (userMedicalHistory.tension) conditions.push('🏥 Hypertension');
         if (userMedicalHistory.other) conditions.push(`🏥 Autre: ${userMedicalHistory.other}`);
-        
+
         if (conditions.length > 0) {
             antecedentsInfo = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -346,7 +403,9 @@ ${conditions.join('\n')}
     }
 
     const nextQuestion = missingFields.length > 0 ? missingFields[0] : null;
-    const questionGuide = nextQuestion ? `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle, pas robotique.` : '';
+    const questionGuide = nextQuestion ?
+        `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle, pas robotique.` :
+        '';
 
     const prompt = `Tu es un médecin assistant bienveillant et expert. Tu as une conversation médicale en cours.
 
@@ -369,7 +428,7 @@ CONSIGNES DE RÉPONSE :
 1. Réponds DIRECTEMENT au message du patient — comprends ce qu'il dit vraiment
 2. Sois empathique, humain, et professionnel
 3. Si le patient exprime de la douleur, de l'inquiétude ou du stress : reconnais-le d'abord
-4. Utilise les informations RAG si pertinentes, en les adaptant au contexte du patient
+4. **Si un PROTOCOLE MÉDICAL avec source officielle (MinSanté Maroc, Croix-Rouge, OMS) est fourni ci-dessus, cite OBLIGATOIREMENT cette source dans ta réponse**
 5. **TIENS COMPTE DES ANTÉCÉDENTS MÉDICAUX** du patient (diabète, asthme, hypertension) pour adapter tes conseils
 6. Ne répète PAS les infos déjà dites dans l'historique
 7. ${questionGuide || "Donne tes recommandations médicales basées sur les informations collectées."}
@@ -391,14 +450,12 @@ RÉPONSE :`;
 }
 
 // ================= PROCESSUS PRINCIPAL =================
-// ✅ MODIFICATION : Ajout des paramètres userMedicalHistory, userAge, userGender
 async function processMessageGroq(userMessage, currentSummary = {}, sessionId = null, conversationHistory = [], userMedicalHistory = null, userAge = null, userGender = null) {
     console.log(`\n${'='.repeat(60)}`);
     console.log(`📨 [MESSAGE] "${userMessage}"`);
     console.log(`📊 [RÉSUMÉ ACTUEL]`, JSON.stringify(currentSummary));
     console.log(`${'='.repeat(60)}`);
 
-    // ✅ Affichage des antécédents si disponibles
     if (userMedicalHistory) {
         console.log(`🏥 [ANTÉCÉDENTS] Patient connu:`);
         if (userMedicalHistory.diabete) console.log(`   - Diabète`);
@@ -412,11 +469,10 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
     const lang = detectLanguage(userMessage);
     console.log(`🌐 [LANGUE] ${lang}`);
 
-    // ✅ 1. EXTRACTION INTELLIGENTE PAR LLM (avec antécédents)
+    // ✅ 1. EXTRACTION INTELLIGENTE PAR LLM
     console.log("\n🧠 [EXTRACTION] Analyse sémantique...");
     const extracted = await extractWithGroq(userMessage, currentSummary, conversationHistory, userMedicalHistory, userAge, userGender);
 
-    // Fusionner les infos extraites avec l'existant (ne pas écraser avec null)
     const updatedSummary = {...currentSummary };
     for (const [key, value] of Object.entries(extracted)) {
         if (value !== null && value !== undefined && value !== '' &&
@@ -424,13 +480,8 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
             updatedSummary[key] = value;
         }
     }
-    // Enrichir avec les champs étendus
-    if (
-        extracted.additionalSymptoms &&
-        extracted.additionalSymptoms.length > 0
-    ) {
-        updatedSummary.additionalSymptoms =
-            extracted.additionalSymptoms;
+    if (extracted.additionalSymptoms && extracted.additionalSymptoms.length > 0) {
+        updatedSummary.additionalSymptoms = extracted.additionalSymptoms;
     }
     if (extracted.medicalHistory) updatedSummary.medicalHistory = extracted.medicalHistory;
     if (extracted.currentMedication) updatedSummary.currentMedication = extracted.currentMedication;
@@ -438,7 +489,7 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
 
     console.log(`📊 [RÉSUMÉ MIS À JOUR]`, JSON.stringify(updatedSummary));
 
-    // ✅ 2. ÉVALUATION URGENCE PAR LLM (avec antécédents)
+    // ✅ 2. ÉVALUATION URGENCE PAR LLM
     console.log("\n⚠️ [URGENCE] Évaluation intelligente...");
     const emergencyEval = await evaluateEmergencyByLLM(userMessage, updatedSummary, conversationHistory, userMedicalHistory, userAge);
 
@@ -451,11 +502,9 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
 
     // ✅ 4. URGENCE STANDARD → ESCALADE APRÈS COLLECTE MINIMALE
     if (emergencyEval.level === 'urgent' && emergencyEval.needsImmediateAction) {
-        // Si on a les infos minimales, escalader
         if (updatedSummary.symptom && updatedSummary.age) {
             return await escaladeUrgence(updatedSummary, sessionId, emergencyEval.reasoning, lang);
         }
-        // Sinon, collecter en urgence
         const urgentCollect = lang === 'ar' ?
             `⚠️ **وضع يستدعي الانتباه**\n\n${emergencyEval.reasoning}\n\nسأساعدك بسرعة. ما هو عمر المريض؟` :
             `⚠️ **Situation nécessitant attention**\n\n${emergencyEval.reasoning}\n\nJe vais vous aider rapidement. Quel est l'âge du patient ?`;
@@ -479,7 +528,7 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
     const missing = getMissing(updatedSummary);
     console.log(`📋 [MANQUANTS] ${missing.length > 0 ? missing.join(', ') : 'Aucun'}`);
 
-    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE (avec antécédents)
+    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE
     console.log("\n💬 [GROQ] Génération réponse intelligente...");
     const medicalResponse = await generateSmartResponse(
         userMessage, ragResults, updatedSummary, conversationHistory,
@@ -491,7 +540,6 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
         console.log(`✅ [COMPLET] Toutes les infos collectées — envoi au PFA`);
         await sendToPFA(updatedSummary, sessionId);
 
-        // ✅ Utiliser evaluateSeverity avec antécédents
         const severity = evaluateSeverity(updatedSummary, userMedicalHistory);
         const completionPrefix = lang === 'ar' ?
             `✅ **تم جمع المعلومات الكاملة**\n\n` :

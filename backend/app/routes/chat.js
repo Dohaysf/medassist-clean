@@ -113,11 +113,7 @@ router.get('/whisper-health', async(req, res) => {
         });
     }
 });
-
-// ─────────────────────────────────────────────────────────────────────────────
-// ✅ ROUTE : POST /api/chat/ (AVEC auth !)
-// ─────────────────────────────────────────────────────────────────────────────
-router.post('/', auth, handleChat);  // ← ICI LA CORRECTION !
+router.post('/', auth, handleChat);
 
 // ─────────────────────────────────────────────────────────────────────────────
 // ROUTE : POST /api/chat/reset-session

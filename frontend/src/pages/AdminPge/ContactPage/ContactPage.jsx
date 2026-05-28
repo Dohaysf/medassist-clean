@@ -10,6 +10,9 @@ const ContactPage = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedMessage, setSelectedMessage] = useState(null);
 
+  // Nombre de messages non lus
+  const unreadCount = messages.filter(m => !m.read).length;
+
   useEffect(() => {
     fetchMessages();
   }, []);
@@ -43,6 +46,30 @@ const ContactPage = () => {
     }
   }, [searchTerm, messages]);
 
+  // Sélectionner + marquer comme lu automatiquement
+  const handleSelectMessage = async (msg) => {
+    setSelectedMessage(msg);
+    if (!msg.read) {
+      try {
+        const token = localStorage.getItem('token');
+        await axios.patch(
+          `http://localhost:5000/api/admin/contacts/${msg._id}/read`,
+          {},
+          { headers: { Authorization: `Bearer ${token}` } }
+        );
+        // Mise à jour locale sans refetch
+        const updated = { ...msg, read: true };
+        setMessages(prev => prev.map(m => m._id === msg._id ? updated : m));
+        setFilteredMessages(prev => prev.map(m => m._id === msg._id ? updated : m));
+        setSelectedMessage(updated);
+        // Notifie la sidebar de mettre à jour son badge
+        window.dispatchEvent(new Event('contactRead'));
+      } catch (err) {
+        console.error('Erreur markAsRead:', err);
+      }
+    }
+  };
+
   const handleDelete = async (id) => {
     if (!window.confirm('Supprimer ce message ?')) return;
     try {
@@ -58,11 +85,8 @@ const ContactPage = () => {
   };
 
   const formatDate = (date) => new Date(date).toLocaleString('fr-FR', {
-    day: '2-digit',
-    month: '2-digit',
-    year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit'
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit'
   });
 
   if (loading) return (
@@ -73,7 +97,8 @@ const ContactPage = () => {
 
   return (
     <div className="contact-page">
-      {/* Topbar style chat */}
+
+      {/* Topbar */}
       <div className="contact-topbar">
         <span className="contact-topbar-title">📬 Messages de contact</span>
         <span className="contact-topbar-badge">Administration</span>
@@ -92,25 +117,34 @@ const ContactPage = () => {
         </div>
       </div>
 
-      {/* Layout à 2 colonnes comme le chat */}
+      {/* Layout 2 colonnes */}
       <div className="contact-layout">
-        {/* Liste des messages (comme la liste des messages dans le chat) */}
+
+        {/* Liste */}
         <div className="messages-list">
           <div className="list-header">
             <span>📋 Messages ({filteredMessages.length})</span>
+            {unreadCount > 0 && (
+              <span className="unread-badge">
+                {unreadCount} nouveau{unreadCount > 1 ? 'x' : ''}
+              </span>
+            )}
           </div>
+
           {filteredMessages.length === 0 ? (
             <div className="no-messages">📭 Aucun message trouvé</div>
           ) : (
             filteredMessages.map(msg => (
               <div
                 key={msg._id}
-                className={`message-card ${selectedMessage?._id === msg._id ? 'active' : ''}`}
-                onClick={() => setSelectedMessage(msg)}
+                className={`message-card${selectedMessage?._id === msg._id ? ' active' : ''}${!msg.read ? ' unread' : ''}`}
+                onClick={() => handleSelectMessage(msg)}
               >
                 <div className="message-card-header">
                   <div className="message-name">
-                    <FaUser className="card-icon" /> {msg.name}
+                    <FaUser className="card-icon" />
+                    {msg.name}
+                    {!msg.read && <span className="unread-dot" />}
                   </div>
                   <div className="message-date">
                     <FaCalendarAlt className="card-icon" /> {formatDate(msg.createdAt)}
@@ -133,7 +167,7 @@ const ContactPage = () => {
           )}
         </div>
 
-        {/* Détail du message (comme la zone de chat) */}
+        {/* Détail */}
         <div className="message-detail">
           {selectedMessage ? (
             <>
