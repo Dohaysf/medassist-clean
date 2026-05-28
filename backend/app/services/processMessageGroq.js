@@ -95,24 +95,62 @@ async function searchRAG(query, language = 'fr') {
     }
 }
 
-// ================= HELPER : RÉCUPÉRER PROTOCOLE RAG =================
+// ================= HELPER : PROTOCOLE OFFICIEL UNIQUEMENT =================
 async function getProtocoleFromRAG(summary, lang) {
     try {
         const ragResults = await searchRAG(
-            `${summary.symptom || ''} ${summary.bodyPart || ''} urgence protocole`.trim(),
+            `${summary.symptom || ''} ${summary.bodyPart || ''} urgence protocole premiers secours`.trim(),
             lang
         );
-        if (ragResults.length > 0 && ragResults[0].similarity > 0.3) {
-            const sourceLabel = SOURCE_LABELS[ragResults[0].source] || null;
-            if (sourceLabel) {
-                console.log(`📋 [PROTOCOLE] Source: ${sourceLabel}`);
-                return { content: ragResults[0].content, sourceLabel };
+        for (const result of ragResults) {
+            if (result.similarity > 0.3) {
+                const sourceLabel = SOURCE_LABELS[result.source] || null;
+                if (sourceLabel) {
+                    console.log(`📋 [PROTOCOLE OFFICIEL] ${sourceLabel} (${result.similarity})`);
+                    return { content: result.content, sourceLabel };
+                }
             }
         }
     } catch (e) {
         console.error("❌ RAG protocole:", e.message);
     }
     return null;
+}
+
+// ================= CALCUL SCORE DE CONFIANCE =================
+/**
+ * Calcule le niveau de confiance de la réponse en fonction des résultats RAG.
+ * @param {Array} ragResults - Résultats retournés par le RAG
+ * @returns {{ level: string, source: string|null, score: number, label: string }}
+ */
+function computeConfidence(ragResults) {
+    if (!ragResults || ragResults.length === 0) {
+        return { level: 'unverified', source: null, score: 0, label: '⚠️ Non vérifié — aucune source disponible' };
+    }
+
+    // Chercher la meilleure source officielle
+    for (const result of ragResults) {
+        if (result.similarity > 0.3 && SOURCE_LABELS[result.source]) {
+            return {
+                level: 'verified',
+                source: SOURCE_LABELS[result.source],
+                score: result.similarity,
+                label: `✅ Protocole officiel — ${SOURCE_LABELS[result.source]} (${Math.round(result.similarity * 100)}%)`
+            };
+        }
+    }
+
+    // Source non officielle mais contenu pertinent
+    if (ragResults[0].similarity > 0.4) {
+        return {
+            level: 'partial',
+            source: 'base médicale interne',
+            score: ragResults[0].similarity,
+            label: `🔵 Basé sur base médicale interne (${Math.round(ragResults[0].similarity * 100)}%)`
+        };
+    }
+
+    return { level: 'unverified', source: null, score: ragResults[0].similarity, label: '⚠️ Non vérifié — source peu pertinente' };
 }
 
 // ================= EXTRACTION INTELLIGENTE PAR LLM =================
@@ -242,7 +280,7 @@ NIVEAUX :
 - modere: consultation dans la journée ou le lendemain
 - faible: conseil médical suffit
 
-⚠️ IMPORTANT : Tiens compte des ANTÉCÉDENTS MÉDICAUX (diabète, asthme, hypertension) pour évaluer la gravité. Un patient asthmatique avec une difficulté respiratoire est plus critique qu'un patient sans antécédents.`;
+⚠️ IMPORTANT : Tiens compte des ANTÉCÉDENTS MÉDICAUX (diabète, asthme, hypertension) pour évaluer la gravité.`;
 
     try {
         const response = await callGroq(prompt);
@@ -259,128 +297,185 @@ NIVEAUX :
     }
 }
 
-// ================= RÉPONSE URGENCE CRITIQUE =================
-async function handleCriticalEmergency(userMessage, summary, sessionId, lang, reasoning = '') {
-    console.log(`🔴🔴🔴 [ACTION IMMÉDIATE] URGENCE CRITIQUE 🔴🔴🔴`);
+// ================= GESTION URGENCE CRITIQUE + URGENT (UNIFIÉE) =================
+async function handleHighEmergency(userMessage, summary, sessionId, lang, level, reasoning) {
+    const isCritique = level === 'critique';
+    console.log(`${isCritique ? '🔴🔴🔴 URGENCE CRITIQUE' : '🟠 URGENCE STANDARD'} — ${reasoning}`);
 
-    await sendEmergencySMS(summary, sessionId, `URGENCE CRITIQUE - ${reasoning}`);
+    await sendEmergencySMS(summary, sessionId, `${level.toUpperCase()} - ${reasoning}`);
     await sendToPFA(summary, sessionId);
+    console.log(`✅ Dossier envoyé au PFA (niveau: ${level})`);
 
-    // ✅ Récupérer le protocole officiel
     const protocole = await getProtocoleFromRAG(summary, lang);
-    const protocoleText = protocole ?
-        (lang === 'ar' ?
-            `\n\n📋 **وفق بروتوكول ${protocole.sourceLabel} :**\n${protocole.content}` :
-            `\n\n📋 **Selon le protocole ${protocole.sourceLabel} :**\n${protocole.content}`) :
-        '';
 
-    const criticalResponse = lang === 'ar' ?
-        `🚨🚨 **حالة طارئة جداً - تصرف فوري** 🚨🚨
+    // =====================================================
+    // OPTION B : LLM contraint — ne peut utiliser que le protocole RAG
+    // =====================================================
+    let firstAidPrompt;
 
-هذه حالة طبية خطيرة تتطلب تدخلاً فورياً.
+    if (protocole) {
+        // Protocole officiel disponible → contraindre strictement
+        firstAidPrompt = `Tu es un médecin urgentiste. Génère des instructions de premiers secours IMMÉDIATES et PRÉCISES.
 
-**📞 اتصل بالإسعاف فوراً على الرقم 141**
+SITUATION : ${level === 'critique' ? 'URGENCE VITALE' : 'URGENCE MÉDICALE'}
+Symptôme: ${summary.symptom || 'non précisé'}
+Localisation: ${summary.bodyPart || 'non précisée'}
+Âge: ${summary.age || 'non précisé'}
+Analyse: ${reasoning}
 
-**ما يجب فعله الآن :**
-1. **اتصل بالرقم 141** — أخبرهم بما يحدث بالضبط
-2. **لا تحرك الشخص** — إلا إذا كان في خطر إضافي
-3. **تحقق من التنفس** — إذا توقف، ابدأ الإنعاش القلبي الرئوي
-4. **افتح المجاري التنفسية** — إذا كان فاقداً للوعي
-5. **ابقَ بالقرب منه** — حتى وصول الإسعاف
+PROTOCOLE OFFICIEL FOURNI (${protocole.sourceLabel}) :
+${protocole.content}
 
-تم إرسال تنبيه للفريق الطبي. 🚨${protocoleText}` :
-        `🚨🚨 **URGENCE CRITIQUE — ACTION IMMÉDIATE** 🚨🚨
+⛔ RÈGLE ABSOLUE : Tu dois utiliser UNIQUEMENT les étapes contenues dans ce protocole officiel ci-dessus.
+N'ajoute, n'invente et ne modifie aucune instruction qui n'y figure pas.
+Adapte uniquement la formulation à la langue et au niveau d'urgence.
 
-**📞 APPELEZ LE SAMU IMMÉDIATEMENT : 141**
+Génère les instructions en ${lang === 'ar' ? 'arabe dialectal marocain' : 'français'}.
+Format : liste numérotée, actions concrètes, max 5 étapes issues du protocole.
+${isCritique ? 'Commence par appeler le 141.' : 'Inclus quand consulter en urgence.'}
+Réponds UNIQUEMENT avec les instructions, sans introduction.`;
+    } else {
+        // Aucun protocole RAG → instructions minimales de sécurité uniquement, sans improvisation
+        firstAidPrompt = `Tu es un médecin urgentiste.
 
-**À faire maintenant :**
-1. **Appelez le 141** — décrivez précisément la situation
-2. **Ne déplacez pas la personne** (sauf danger immédiat)
-3. **Vérifiez la respiration** — si absente, commencez la RCP
-4. **Dégagez les voies aériennes** si inconsciente
-5. **Restez auprès d'elle** jusqu'à l'arrivée des secours
+SITUATION : ${level === 'critique' ? 'URGENCE VITALE' : 'URGENCE MÉDICALE'}
+Symptôme: ${summary.symptom || 'non précisé'}
+Analyse: ${reasoning}
 
-Une alerte a été envoyée à l'équipe médicale. 🚨${protocoleText}`;
+⛔ RÈGLE ABSOLUE : Aucun protocole officiel n'est disponible pour ce cas précis.
+Tu NE DOIS PAS inventer des étapes médicales spécifiques.
+Donne UNIQUEMENT les mesures de sécurité universelles ci-dessous, reformulées en ${lang === 'ar' ? 'arabe dialectal marocain' : 'français'} :
 
-    return {
-        reply: criticalResponse,
-        intent: "critical_emergency",
-        extractedInfo: summary,
-        severity: "critique",
-        escalated: true
-    };
-}
+Mesures universelles autorisées :
+1. Appelez immédiatement le 141
+2. Allongez le patient dans une position confortable
+3. Ne donnez aucun médicament sans avis médical
+4. Surveillez la respiration et le niveau de conscience
+5. Ne laissez pas le patient seul jusqu'à l'arrivée des secours
 
-// ================= ESCALADE URGENCE STANDARD =================
-async function escaladeUrgence(summary, sessionId, reasoning, lang) {
-    console.warn(`🟠 [ESCALADE URGENTE] ${reasoning}`);
-    await sendEmergencySMS(summary, sessionId, reasoning);
-    await sendToPFA(summary, sessionId);
+Réponds UNIQUEMENT avec ces 5 étapes adaptées à la langue, sans ajouter d'autres instructions.`;
+    }
 
-    // ✅ Récupérer le protocole officiel
-    const protocole = await getProtocoleFromRAG(summary, lang);
-    const protocoleText = protocole ?
-        (lang === 'ar' ?
-            `\n\n📋 **وفق بروتوكول ${protocole.sourceLabel} :**\n${protocole.content}` :
-            `\n\n📋 **Selon le protocole ${protocole.sourceLabel} :**\n${protocole.content}`) :
-        '';
+    let firstAidInstructions = '';
+    try {
+        firstAidInstructions = await callGroq(firstAidPrompt);
+        firstAidInstructions = firstAidInstructions.trim();
+    } catch (e) {
+        console.error("❌ Erreur génération premiers secours:", e.message);
+        firstAidInstructions = lang === 'ar' ?
+            '1. اتصل بالإسعاف على الرقم 141\n2. أبقِ المريض في وضع مريح\n3. لا تترك المريض وحده' :
+            '1. Appelez le 141\n2. Maintenez le patient allongé\n3. Ne laissez pas le patient seul';
+    }
 
-    const reply = lang === 'ar' ?
-        `⚠️ **تنبيه طبي**\n\nتم إرسال تنبيه للفريق الطبي.\n\nاتصل بالإسعاف على الرقم **141** إذا تفاقمت الحالة.${protocoleText}` :
-        `⚠️ **Alerte médicale**\n\nUne alerte a été envoyée à l'équipe médicale.\n\nAppelez le **SAMU** au **141** si la situation s'aggrave.${protocoleText}`;
+    // Badge de confiance
+    const confidenceBadge = protocole ?
+        (lang === 'ar' ? `\n\n📋 **بروتوكول رسمي — ${protocole.sourceLabel}**` : `\n\n📋 **Protocole officiel — ${protocole.sourceLabel}**`) :
+        (lang === 'ar' ? `\n\n⚠️ **تعليمات أمان عامة — لا يوجد بروتوكول رسمي متاح لهذه الحالة**` : `\n\n⚠️ **Instructions de sécurité générales — aucun protocole officiel disponible pour ce cas**`);
+
+    let reply;
+    if (isCritique) {
+        reply = lang === 'ar' ?
+            `🚨🚨 **حالة طارئة جداً — تصرف فوري** 🚨🚨\n\n${firstAidInstructions}\n\n✅ تم إرسال الدوسيه الطبي للفريق المختص.${confidenceBadge}` :
+            `🚨🚨 **URGENCE CRITIQUE — ACTION IMMÉDIATE** 🚨🚨\n\n${firstAidInstructions}\n\n✅ Le dossier médical a été transmis à l'équipe spécialisée.${confidenceBadge}`;
+    } else {
+        reply = lang === 'ar' ?
+            `⚠️ **تنبيه طبي — وضع يستدعي التدخل السريع**\n\n${firstAidInstructions}\n\n✅ تم إرسال الدوسيه الطبي للفريق المختص.${confidenceBadge}` :
+            `⚠️ **Alerte médicale — Situation nécessitant une intervention rapide**\n\n${firstAidInstructions}\n\n✅ Le dossier médical a été transmis à l'équipe spécialisée.${confidenceBadge}`;
+    }
+
+    // Score de confiance
+    const confidence = protocole ?
+        { level: 'verified', source: protocole.sourceLabel, score: 1.0, label: `✅ Protocole officiel — ${protocole.sourceLabel}` } :
+        { level: 'unverified', source: null, score: 0, label: '⚠️ Instructions générales — aucune source officielle disponible' };
 
     return {
         reply,
-        intent: "escalade_urgence",
+        intent: isCritique ? 'critical_emergency' : 'urgent_emergency',
         extractedInfo: summary,
-        severity: "urgent",
-        escalated: true
+        severity: level,
+        escalated: true,
+        ragUsed: !!protocole,
+        confidence
     };
 }
 
-// ================= GÉNÉRATION RÉPONSE MÉDICALE INTELLIGENTE =================
+// ================= GÉNÉRATION RÉPONSE MÉDICALE INTELLIGENTE (OPTION C) =================
 async function generateSmartResponse(userMessage, ragResults, summary, conversationHistory, emergencyEval, lang, missingFields, userMedicalHistory = null, userAge = null, userGender = null) {
     const historyText = conversationHistory.slice(-8).map(m =>
         `${m.role === 'user' ? 'Patient' : 'Médecin IA'}: ${m.content}`
     ).join('\n');
 
-    // ✅ Construction du contexte RAG avec citation obligatoire de source officielle
-    let ragContext = '';
-    if (ragResults.length > 0 && ragResults[0].similarity > 0.3) {
-        const topResult = ragResults[0];
-        const sourceLabel = SOURCE_LABELS[topResult.source] || null;
+    // =====================================================
+    // OPTION A+B : Construction du contexte RAG + contrainte
+    // =====================================================
 
-        const sourceInstruction = sourceLabel ?
-            `⚠️ INSTRUCTION OBLIGATOIRE : Tu DOIS commencer ta réponse médicale par une citation de cette source avec : "Selon le protocole ${sourceLabel}..." ou "${sourceLabel} recommande que..."` :
-            '';
+    // Trouver la meilleure source officielle
+    let bestOfficialResult = null;
+    let bestMedicalResult = null;
 
-        ragContext = `
-
-PROTOCOLE MÉDICAL PERTINENT (similarité: ${Math.round(topResult.similarity * 100)}%) :
-Source officielle: ${sourceLabel || topResult.source || 'Base médicale'}
-Contenu du protocole: ${topResult.content}
-${sourceInstruction}`;
-
-        // ✅ Protocole complémentaire si source différente disponible
-        if (ragResults.length > 1 && ragResults[1].similarity > 0.3) {
-            const secondResult = ragResults[1];
-            const secondLabel = SOURCE_LABELS[secondResult.source] || null;
-            if (secondLabel && secondResult.source !== topResult.source) {
-                ragContext += `
-
-PROTOCOLE COMPLÉMENTAIRE :
-Source: ${secondLabel}
-Contenu: ${secondResult.content}
-⚠️ Tu peux également mentionner cette source complémentaire si pertinente.`;
-            }
+    for (const result of ragResults) {
+        if (result.similarity > 0.3 && SOURCE_LABELS[result.source] && !bestOfficialResult) {
+            bestOfficialResult = result;
+        }
+        if (result.similarity > 0.4 && !bestMedicalResult) {
+            bestMedicalResult = result;
         }
     }
 
-    const collectedInfo = Object.entries(summary)
-        .filter(([k, v]) => v && !k.startsWith('_'))
-        .map(([k, v]) => `- ${k}: ${v}`)
-        .join('\n');
+    const hasOfficialSource = !!bestOfficialResult;
+    const hasMedicalContent = !!bestMedicalResult;
 
+    // Construire le contexte RAG injecté dans le prompt
+    let ragContext = '';
+    if (hasOfficialSource) {
+        const sourceLabel = SOURCE_LABELS[bestOfficialResult.source];
+        ragContext = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+PROTOCOLE MÉDICAL OFFICIEL — SOURCE VÉRIFIÉE
+Source : ${sourceLabel} (similarité: ${Math.round(bestOfficialResult.similarity * 100)}%)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${bestOfficialResult.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    } else if (hasMedicalContent) {
+        ragContext = `
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+INFORMATIONS MÉDICALES INTERNES (base médicale non officielle)
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+${bestMedicalResult.content}
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━`;
+    }
+
+    // =====================================================
+    // OPTION B : Instruction de contrainte selon disponibilité RAG
+    // =====================================================
+    let ragConstraint;
+
+    if (hasOfficialSource) {
+        ragConstraint = `⛔ RÈGLE ABSOLUE — CONTRAINTE RAG STRICTE :
+Tu ne peux utiliser QUE les informations du PROTOCOLE OFFICIEL fourni ci-dessus.
+Ne génère aucune instruction médicale qui n'y figure pas explicitement.
+Si une question dépasse ce contenu, réponds exactement : "Je ne dispose pas de protocole officiel sur ce point précis — consultez un médecin ou appelez le 141."
+Cite OBLIGATOIREMENT la source dans ta réponse : "Selon le protocole ${SOURCE_LABELS[bestOfficialResult.source]}..."`;
+
+    } else if (hasMedicalContent) {
+        ragConstraint = `⛔ RÈGLE ABSOLUE — CONTRAINTE RAG STRICTE :
+Tu ne peux utiliser QUE les informations médicales fournies dans le contexte ci-dessus.
+N'ajoute aucune information médicale supplémentaire qui n'y figure pas.
+Si une donnée est absente, indique-le clairement : "Cette information n'est pas disponible dans ma base — consultez un médecin."
+Ne cite PAS le nom "base médicale" dans ta réponse.`;
+
+    } else {
+        ragConstraint = `⛔ RÈGLE ABSOLUE — AUCUNE SOURCE RAG DISPONIBLE :
+Tu NE DOIS PAS générer d'instructions médicales spécifiques de ta propre initiative.
+Tu n'as pas de protocole ni de source médicale disponible pour ce cas.
+Réponds UNIQUEMENT :
+- En posant la question de collecte manquante (si applicable)
+- En orientant vers le 141 ou un médecin
+- En donnant les 3 mesures de sécurité universelles UNIQUEMENT : ne pas bouger le patient, surveiller la respiration, ne pas donner de médicament sans avis.
+NE PAS inventer d'autres étapes. NE PAS diagnostiquer.`;
+    }
+
+    // Antécédents médicaux
     let antecedentsInfo = '';
     if (userMedicalHistory) {
         const conditions = [];
@@ -392,7 +487,7 @@ Contenu: ${secondResult.content}
         if (conditions.length > 0) {
             antecedentsInfo = `
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-🏥 **ANTÉCÉDENTS MÉDICAUX DU PATIENT (de son profil)**
+🏥 ANTÉCÉDENTS MÉDICAUX DU PATIENT
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 ${conditions.join('\n')}
 👤 Âge: ${userAge || 'Non renseigné'} ans
@@ -402,12 +497,17 @@ ${conditions.join('\n')}
         }
     }
 
+    const collectedInfo = Object.entries(summary)
+        .filter(([k, v]) => v && !k.startsWith('_'))
+        .map(([k, v]) => `- ${k}: ${v}`)
+        .join('\n');
+
     const nextQuestion = missingFields.length > 0 ? missingFields[0] : null;
     const questionGuide = nextQuestion ?
-        `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle, pas robotique.` :
+        `\nTu DOIS poser UNE question naturelle pour obtenir: "${nextQuestion}" — formule-la de façon conversationnelle.` :
         '';
 
-    const prompt = `Tu es un médecin assistant bienveillant et expert. Tu as une conversation médicale en cours.
+    const prompt = `Tu es un médecin assistant bienveillant, expert et réactif. Tu as une conversation médicale en cours.
 
 HISTORIQUE :
 ${historyText || "(Premier échange)"}
@@ -422,19 +522,23 @@ ${antecedentsInfo}
 - Niveau d'urgence: ${emergencyEval.level || 'non évalué'}
 - Analyse: ${emergencyEval.reasoning || ''}
 - Action recommandée: ${emergencyEval.recommendedAction || ''}
+
 ${ragContext}
 
-CONSIGNES DE RÉPONSE :
-1. Réponds DIRECTEMENT au message du patient — comprends ce qu'il dit vraiment
-2. Sois empathique, humain, et professionnel
-3. Si le patient exprime de la douleur, de l'inquiétude ou du stress : reconnais-le d'abord
-4. **Si un PROTOCOLE MÉDICAL avec source officielle (MinSanté Maroc, Croix-Rouge, OMS) est fourni ci-dessus, cite OBLIGATOIREMENT cette source dans ta réponse**
-5. **TIENS COMPTE DES ANTÉCÉDENTS MÉDICAUX** du patient (diabète, asthme, hypertension) pour adapter tes conseils
-6. Ne répète PAS les infos déjà dites dans l'historique
-7. ${questionGuide || "Donne tes recommandations médicales basées sur les informations collectées."}
-8. Langue de réponse: ${lang === 'ar' ? 'Arabe (dialecte marocain compréhensible)' : 'Français naturel et clair'}
-9. Format: texte naturel, utilise des **gras** pour les points importants, pas de listes à puces sauf si vraiment utile
-10. Longueur: concis mais complet — max 4-5 lignes sauf si c'est une urgence
+${ragConstraint}
+
+CONSIGNES ADDITIONNELLES :
+1. Réponds DIRECTEMENT au message du patient avec empathie et professionnalisme
+2. ${questionGuide || "Complète avec tes recommandations issues du protocole uniquement."}
+3. Tiens compte des ANTÉCÉDENTS MÉDICAUX pour personnaliser les conseils (dans les limites du protocole)
+4. Ne répète PAS les infos déjà dites dans l'historique
+5. Langue: ${lang === 'ar' ? 'Arabe dialectal marocain compréhensible' : 'Français naturel et clair'}
+6. Longueur: max 6 lignes sauf si le protocole en requiert plus
+7. Structure ta réponse :
+   a) Réponse empathique au message
+   b) Instructions issues du protocole (si disponible)
+   c) Question de collecte si info manquante
+   d) Source citée obligatoirement si protocole officiel
 
 RÉPONSE :`;
 
@@ -493,43 +597,50 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
     console.log("\n⚠️ [URGENCE] Évaluation intelligente...");
     const emergencyEval = await evaluateEmergencyByLLM(userMessage, updatedSummary, conversationHistory, userMedicalHistory, userAge);
 
-    // ✅ 3. URGENCE CRITIQUE → ACTION IMMÉDIATE
-    if (emergencyEval.level === 'critique' && emergencyEval.needsImmediateAction) {
-        return await handleCriticalEmergency(
-            userMessage, updatedSummary, sessionId, lang, emergencyEval.reasoning
-        );
-    }
+    // ✅ 3. CAS CRITIQUE OU URGENT → GESTION UNIFIÉE
+    if (emergencyEval.needsImmediateAction &&
+        (emergencyEval.level === 'critique' || emergencyEval.level === 'urgent')) {
 
-    // ✅ 4. URGENCE STANDARD → ESCALADE APRÈS COLLECTE MINIMALE
-    if (emergencyEval.level === 'urgent' && emergencyEval.needsImmediateAction) {
-        if (updatedSummary.symptom && updatedSummary.age) {
-            return await escaladeUrgence(updatedSummary, sessionId, emergencyEval.reasoning, lang);
+        if (updatedSummary.symptom) {
+            console.log(`🚨 [${emergencyEval.level.toUpperCase()}] Action immédiate déclenchée`);
+            return await handleHighEmergency(
+                userMessage, updatedSummary, sessionId, lang,
+                emergencyEval.level, emergencyEval.reasoning
+            );
         }
+
+        // Infos insuffisantes → collecter en urgence avec mesures de sécurité universelles uniquement
         const urgentCollect = lang === 'ar' ?
-            `⚠️ **وضع يستدعي الانتباه**\n\n${emergencyEval.reasoning}\n\nسأساعدك بسرعة. ما هو عمر المريض؟` :
-            `⚠️ **Situation nécessitant attention**\n\n${emergencyEval.reasoning}\n\nJe vais vous aider rapidement. Quel est l'âge du patient ?`;
+            `⚠️ **وضع يستدعي الانتباه — ${emergencyEval.reasoning}**\n\n🩺 في انتظار المزيد من المعلومات، إليك الإجراءات الآمنة الأساسية :\n1. أبقِ المريض في وضع مريح\n2. لا تعطه أي دواء دون استشارة\n3. راقب التنفس\n\nما هو العرض الرئيسي الذي يعاني منه المريض؟` :
+            `⚠️ **Situation préoccupante — ${emergencyEval.reasoning}**\n\n🩺 En attendant plus d'informations, mesures de sécurité de base :\n1. Allongez le patient dans une position confortable\n2. Ne donnez aucun médicament sans avis médical\n3. Surveillez la respiration\n\nQuel est le symptôme principal du patient ?`;
+
         return {
             reply: urgentCollect,
             extractedInfo: extracted,
             intent: "urgent_collect",
-            severity: "urgent",
-            updatedSummary
+            severity: emergencyEval.level,
+            updatedSummary,
+            confidence: { level: 'unverified', source: null, score: 0, label: '⚠️ Mesures générales — informations insuffisantes' }
         };
     }
 
-    // ✅ 5. RECHERCHE RAG
+    // ✅ 4. RECHERCHE RAG
     console.log("\n🔍 [RAG] Recherche...");
     const searchQuery = updatedSummary.symptom ?
         `${updatedSummary.symptom} ${updatedSummary.bodyPart || ''} ${userMessage}`.trim() :
         userMessage;
     const ragResults = await searchRAG(searchQuery, lang);
 
+    // ✅ 5. CALCUL CONFIANCE
+    const confidence = computeConfidence(ragResults);
+    console.log(`🔒 [CONFIANCE] ${confidence.label}`);
+
     // ✅ 6. CHAMPS MANQUANTS
     const missing = getMissing(updatedSummary);
     console.log(`📋 [MANQUANTS] ${missing.length > 0 ? missing.join(', ') : 'Aucun'}`);
 
-    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE
-    console.log("\n💬 [GROQ] Génération réponse intelligente...");
+    // ✅ 7. GÉNÉRATION RÉPONSE INTELLIGENTE CONTRAINTE (OPTION C)
+    console.log("\n💬 [GROQ] Génération réponse contrainte...");
     const medicalResponse = await generateSmartResponse(
         userMessage, ragResults, updatedSummary, conversationHistory,
         emergencyEval, lang, missing, userMedicalHistory, userAge, userGender
@@ -542,8 +653,8 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
 
         const severity = evaluateSeverity(updatedSummary, userMedicalHistory);
         const completionPrefix = lang === 'ar' ?
-            `✅ **تم جمع المعلومات الكاملة**\n\n` :
-            `✅ **Dossier complet**\n\n`;
+            `✅ **تم جمع المعلومات الكاملة — الدوسيه أُرسل للفريق الطبي**\n\n` :
+            `✅ **Dossier complet — transmis à l'équipe médicale**\n\n`;
 
         return {
             reply: completionPrefix + medicalResponse,
@@ -552,7 +663,8 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
             severity,
             esoSummary: updatedSummary,
             updatedSummary: {...updatedSummary, _complete: true },
-            ragUsed: ragResults.length > 0
+            ragUsed: ragResults.length > 0,
+            confidence
         };
     }
 
@@ -564,8 +676,14 @@ async function processMessageGroq(userMessage, currentSummary = {}, sessionId = 
         severity: emergencyEval.level,
         updatedSummary,
         ragUsed: ragResults.length > 0,
-        missingFields: missing
+        missingFields: missing,
+        confidence
     };
 }
 
-module.exports = { processMessageGroq, escaladeUrgence, handleCriticalEmergency };
+// Garder escaladeUrgence pour compatibilité avec les autres routes
+async function escaladeUrgence(summary, sessionId, reasoning, lang = 'fr') {
+    return await handleHighEmergency(null, summary, sessionId, lang, 'urgent', reasoning);
+}
+
+module.exports = { processMessageGroq, escaladeUrgence, handleHighEmergency };
