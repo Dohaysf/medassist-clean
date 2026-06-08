@@ -4,280 +4,364 @@ const path = require("path");
 
 // ================= NORMALISATION =================
 const normalizeText = (text) => {
-  return text
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^\w\s]/g, " ");
+    return text
+        .toLowerCase()
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "")
+        .replace(/[^\w\s]/g, " ");
 };
 
 // ================= DICTIONNAIRES =================
 const SYMPTOM_KEYWORDS = {
-  douleur: ["mal", "douleur", "douloureux", "fait mal"],
-  dyspnee: ["respire", "essoufflement", "souffle", "oppression", "respirer", "suffocation", "étouffement"],
-  cardiaque: ["coeur", "cardiaque", "poitrine", "thorax", "infarctus", "crise cardiaque"],
-  nausee: ["nausée", "vomissement", "mal au coeur"],
-  fievre: ["fièvre", "temperature", "chaud", "frissons"],
-  traumatisme: ["chute", "accident", "coup", "blessure"],
-  saignement: ["saigne", "sang", "hémorragie", "perte de sang"],
-  brulure: ["brûlure", "brulure", "crampe"],
-  inconscience: ["inconscient", "évanouissement", "coma", "perte connaissance", "ne répond plus"],
-  hemorragie: ["hémorragie", "saignement abondant", "perte sang"]
+    douleur: ["mal", "douleur", "douloureux", "fait mal"],
+    dyspnee: ["respire", "essoufflement", "souffle", "oppression", "respirer", "suffocation", "étouffement"],
+    cardiaque: ["coeur", "cardiaque", "poitrine", "thorax", "infarctus", "crise cardiaque"],
+    nausee: ["nausée", "vomissement", "mal au coeur"],
+    fievre: ["fièvre", "temperature", "chaud", "frissons"],
+    traumatisme: ["chute", "accident", "coup", "blessure"],
+    saignement: ["saigne", "sang", "hémorragie", "perte de sang"],
+    brulure: ["brûlure", "brulure", "crampe"],
+    inconscience: ["inconscient", "évanouissement", "coma", "perte connaissance", "ne répond plus"],
+    hemorragie: ["hémorragie", "saignement abondant", "perte sang"]
 };
 
 const BODY_PARTS = {
-  tete: ["tête", "tete", "crâne", "front", "nuque"],
-  poitrine: ["poitrine", "thorax", "sternum"],
-  ventre: ["ventre", "abdomen", "estomac"],
-  dos: ["dos", "lombaires"],
-  jambe: ["jambe", "cuisse", "mollet", "genou"],
-  bras: ["bras", "avant-bras", "coude", "épaule"],
-  cou: ["cou", "nuque"],
-  pied: ["pied", "cheville"],
-  main: ["main", "poignet"],
-  poumon: ["poumon", "poumons", "bronches", "respiration"]
+    tete: ["tête", "tete", "crâne", "front", "nuque"],
+    poitrine: ["poitrine", "thorax", "sternum"],
+    ventre: ["ventre", "abdomen", "estomac"],
+    dos: ["dos", "lombaires"],
+    jambe: ["jambe", "cuisse", "mollet", "genou"],
+    bras: ["bras", "avant-bras", "coude", "épaule"],
+    cou: ["cou", "nuque"],
+    pied: ["pied", "cheville"],
+    main: ["main", "poignet"],
+    poumon: ["poumon", "poumons", "bronches", "respiration"]
 };
 
 // ================= MOTS-CLÉS URGENCE CRITIQUE =================
 const CRITICAL_KEYWORDS = [
-  // Respiratoire
-  'ne respire plus', 'ne respire pas', 'respire plus', 'respire pas',
-  'difficulté à respirer', 'difficulté respiratoire', 'peux pas respirer',
-  'je ne peux pas respirer', 'je peux pas respirer', 'ne peut pas respirer',
-  'étouffement', 'suffocation', 'asphyxie', 'manque d\'air', 'essoufflement severe',
-  'respiration difficile', 'haletant', 'respire mal',
-  
-  // Cardiaque
-  'crise cardiaque', 'infarctus', 'arrêt cardiaque', 'arrêt respiratoire',
-  'douleur thoracique', 'douleur poitrine', 'serrement poitrine',
-  
-  // Inconscience
-  'inconscience', 'évanouissement', 'perte de connaissance', 'coma',
-  'ne répond plus', 'ne bouge plus', 'est inconscient',
-  
-  // Hémorragie
-  'hémorragie grave', 'saignement abondant', 'perte de sang importante'
+    // Respiratoire
+    'ne respire plus', 'ne respire pas', 'respire plus', 'respire pas',
+    'difficulté à respirer', 'difficulté respiratoire', 'peux pas respirer',
+    'je ne peux pas respirer', 'je peux pas respirer', 'ne peut pas respirer',
+    'étouffement', 'suffocation', 'asphyxie', "manque d'air", 'essoufflement severe',
+    'respiration difficile', 'haletant', 'respire mal',
+
+    // Cardiaque
+    'crise cardiaque', 'infarctus', 'arrêt cardiaque', 'arrêt respiratoire',
+    'douleur thoracique', 'douleur poitrine', 'serrement poitrine',
+    'douleur bras gauche', 'douleur irradie bras', 'irradiation bras gauche',
+
+    // AVC
+    'avc', 'accident vasculaire', 'paralysie', 'visage tombant', 'bouche tordue',
+    'trouble de la parole', 'ne parle plus', 'parle mal', 'vision double',
+    'trouble vision', 'mal à la tête soudain', 'céphalée brutale',
+
+    // Inconscience
+    'inconscience', 'évanouissement', 'perte de connaissance', 'coma',
+    'ne répond plus', 'ne bouge plus', 'est inconscient',
+
+    // Hémorragie
+    'hémorragie grave', 'saignement abondant', 'perte de sang importante'
 ];
 
 // ================= DÉTECTION URGENCE CRITIQUE =================
 const isCriticalEmergency = (message) => {
-  const msg = message.toLowerCase().trim();
-  
-  for (const kw of CRITICAL_KEYWORDS) {
-    if (msg.includes(kw)) {
-      console.log(`🚨 [CRITICAL] Mot-clé détecté: "${kw}"`);
-      return true;
+    const msg = message.toLowerCase().trim();
+
+    for (const kw of CRITICAL_KEYWORDS) {
+        if (msg.includes(kw)) {
+            console.log(`🚨 [CRITICAL] Mot-clé détecté: "${kw}"`);
+            return true;
+        }
     }
-  }
-  
-  // Problème respiratoire
-  if ((msg.includes('respir') || msg.includes('souffle')) && 
-      (msg.includes('pas') || msg.includes('plus') || msg.includes('difficile') || msg.includes('mal'))) {
-    console.log(`🚨 [CRITICAL] Problème respiratoire détecté`);
-    return true;
-  }
-  
-  return false;
+
+    // Problème respiratoire combiné
+    if (
+        (msg.includes('respir') || msg.includes('souffle')) &&
+        (msg.includes('pas') || msg.includes('plus') || msg.includes('difficile') || msg.includes('mal'))
+    ) {
+        console.log(`🚨 [CRITICAL] Problème respiratoire détecté`);
+        return true;
+    }
+
+    // Douleur poitrine + bras gauche → signe d'infarctus
+    if (
+        (msg.includes('poitrine') || msg.includes('thorax')) &&
+        (msg.includes('bras') || msg.includes('épaule') || msg.includes('mâchoire'))
+    ) {
+        console.log(`🚨 [CRITICAL] Signes d'infarctus détectés (poitrine + bras/épaule/mâchoire)`);
+        return true;
+    }
+
+    return false;
 };
 
 // ================= EXTRACTION AMÉLIORÉE =================
 const extractInfo = (message, summary = {}) => {
-  const normalized = normalizeText(message);
-  const originalMsg = message.toLowerCase();
-  const info = {};
+    const normalized = normalizeText(message);
+    const originalMsg = message.toLowerCase();
+    const info = {};
 
-  // Symptôme
-  for (const [symptom, keywords] of Object.entries(SYMPTOM_KEYWORDS)) {
-    if (keywords.some(k => normalized.includes(k))) {
-      info.symptom = symptom;
-      break;
+    // Symptôme
+    for (const [symptom, keywords] of Object.entries(SYMPTOM_KEYWORDS)) {
+        if (keywords.some(k => normalized.includes(normalizeText(k)))) {
+            info.symptom = symptom;
+            break;
+        }
     }
-  }
-  
-  // Vérification supplémentaire pour les problèmes respiratoires
-  if (originalMsg.includes('respir') || originalMsg.includes('souffle')) {
-    info.symptom = 'dyspnee';
-  }
-  
-  // Vérification pour douleur thoracique
-  if ((originalMsg.includes('douleur') || originalMsg.includes('mal')) && 
-      (originalMsg.includes('poitrine') || originalMsg.includes('thorax'))) {
-    info.symptom = 'cardiaque';
-    info.bodyPart = 'poitrine';
-  }
 
-  // Partie du corps
-  for (const [part, variants] of Object.entries(BODY_PARTS)) {
-    if (variants.some(v => normalized.includes(v))) {
-      info.bodyPart = part;
-      break;
+    // Vérification supplémentaire pour les problèmes respiratoires
+    if (originalMsg.includes('respir') || originalMsg.includes('souffle')) {
+        info.symptom = 'dyspnee';
     }
-  }
 
-  // Durée
-  const durationMatch = normalized.match(/(\d+)\s*(minute|minutes|heure|heures|jour|jours|h|min|j)/);
-  if (durationMatch) {
-    const number = parseInt(durationMatch[1], 10);
-    let unit = durationMatch[2];
-    if (unit === 'jour' && number > 1) unit = 'jours';
-    if (unit === 'minute' && number > 1) unit = 'minutes';
-    if (unit === 'heure' && number > 1) unit = 'heures';
-    info.duration = `${number} ${unit}`;
-  } else if (normalized.includes("hier")) {
-    info.duration = "1 jour";
-  } else if (normalized.includes("avant-hier")) {
-    info.duration = "2 jours";
-  }
+    // Vérification pour douleur thoracique
+    if (
+        (originalMsg.includes('douleur') || originalMsg.includes('mal')) &&
+        (originalMsg.includes('poitrine') || originalMsg.includes('thorax'))
+    ) {
+        info.symptom = 'cardiaque';
+        info.bodyPart = 'poitrine';
+    }
 
-  // Intensité (1-10)
-  let intensityMatch = normalized.match(/(\d+)\s*\/\s*10|(\d+)\s*sur\s*10/);
-  if (intensityMatch) {
-    const intensity = parseInt(intensityMatch[1] || intensityMatch[2], 10);
-    if (intensity >= 1 && intensity <= 10) info.intensity = intensity;
-  }
+    // Partie du corps
+    for (const [part, variants] of Object.entries(BODY_PARTS)) {
+        if (variants.some(v => normalized.includes(normalizeText(v)))) {
+            info.bodyPart = part;
+            break;
+        }
+    }
 
-  // Âge (0-120)
-  const ageMatch = normalized.match(/(\d+)\s*ans/);
-  if (ageMatch) {
-    const age = parseInt(ageMatch[1], 10);
-    if (age >= 0 && age <= 120) info.age = age;
-  }
+    // Durée
+    const durationMatch = normalized.match(/(\d+)\s*(minute|minutes|heure|heures|jour|jours|h|min|j)/);
+    if (durationMatch) {
+        const number = parseInt(durationMatch[1], 10);
+        let unit = durationMatch[2];
+        if (unit === 'jour' && number > 1) unit = 'jours';
+        if (unit === 'minute' && number > 1) unit = 'minutes';
+        if (unit === 'heure' && number > 1) unit = 'heures';
+        info.duration = `${number} ${unit}`;
+    } else if (normalized.includes("depuis ce matin")) {
+        info.duration = "depuis ce matin";
+    } else if (normalized.includes("depuis hier")) {
+        info.duration = "depuis hier";
+    } else if (normalized.includes("hier")) {
+        info.duration = "1 jour";
+    } else if (normalized.includes("avant-hier")) {
+        info.duration = "2 jours";
+    } else if (normalized.includes("depuis quelques")) {
+        info.duration = "quelques instants";
+    }
 
-  // Localisation simple
-  if (normalized.includes("rue") || normalized.includes("quartier") ||
-      normalized.includes("oujda") || normalized.includes("casablanca")) {
-    info.patientLocation = message;
-  }
+    // Intensité (1-10)
+    const intensityMatch = normalized.match(/(\d+)\s*\/\s*10|(\d+)\s*sur\s*10/);
+    if (intensityMatch) {
+        const intensity = parseInt(intensityMatch[1] || intensityMatch[2], 10);
+        if (intensity >= 1 && intensity <= 10) info.intensity = intensity;
+    } else if (
+        originalMsg.includes('très fort') || originalMsg.includes('très forte') ||
+        originalMsg.includes('insupportable') || originalMsg.includes('atroce')
+    ) {
+        info.intensity = 9;
+    } else if (originalMsg.includes('fort') || originalMsg.includes('forte') || originalMsg.includes('intense')) {
+        info.intensity = 7;
+    } else if (originalMsg.includes('légère') || originalMsg.includes('légèrement') || originalMsg.includes('peu')) {
+        info.intensity = 3;
+    }
 
-  return info;
+    // Âge (0-120)
+    const ageMatch = normalized.match(/(\d+)\s*ans/);
+    if (ageMatch) {
+        const age = parseInt(ageMatch[1], 10);
+        if (age >= 0 && age <= 120) info.age = age;
+    }
+
+    // Localisation — patterns courants
+    const locationPatterns = [
+        /(?:je suis|on est|il est|elle est|nous sommes|se trouve)\s+[àa]\s+([\w\s-]+)/i,
+        /(?:habitons?|habite)\s+[àa]\s+([\w\s-]+)/i,
+        /(?:domicile|adresse|maison|chez moi)\s*(?:[àa:])?\s*([\w\s-]+)/i,
+        /(?:quartier|rue|boulevard|avenue|hay)\s+([\w\s-]+)/i,
+        /[àa]\s+(casablanca|rabat|marrakech|agadir|tanger|fes|meknes|oujda|kenitra|tetouan|safi|mohammedia|temara|sale|beni mellal|nador|settat|khouribga|berrechid|khenifra|larache|guelmim|laayoune|dakhla)([\w\s-]*)/i,
+    ];
+
+    for (const pattern of locationPatterns) {
+        const match = originalMsg.match(pattern);
+        if (match) {
+            info.patientLocation = match[1].trim();
+            break;
+        }
+    }
+
+    // Fallback : si le message contient une ville connue
+    const VILLES_MAROC = [
+        'casablanca', 'rabat', 'marrakech', 'agadir', 'tanger', 'fes', 'meknes',
+        'oujda', 'kenitra', 'tetouan', 'safi', 'mohammedia', 'temara', 'sale',
+        'beni mellal', 'nador', 'settat', 'khouribga', 'berrechid', 'khenifra',
+        'larache', 'guelmim', 'laayoune', 'dakhla', 'ifrane', 'azrou', 'ouarzazate',
+        'errachidia', 'taroudant', 'tiznit', 'chefchaouen', 'al hoceima'
+    ];
+
+    if (!info.patientLocation) {
+        for (const ville of VILLES_MAROC) {
+            if (originalMsg.includes(ville)) {
+                info.patientLocation = ville.charAt(0).toUpperCase() + ville.slice(1);
+                break;
+            }
+        }
+    }
+
+    return info;
 };
 
-// ================= ÉVALUATION SÉVÉRITÉ AVEC ANTÉCÉDENTS =================
-// ✅ MODIFICATION : Ajout du paramètre userMedicalHistory
-const evaluateSeverity = (summary, userMedicalHistory = null) => {
-  const symptom = (summary.symptom || '').toLowerCase();
-  const bodyPart = (summary.bodyPart || '').toLowerCase();
-  const intensity = Number(summary.intensity);
-  const duration = summary.duration ? parseInt(summary.duration) : 0;
+// ================= ÉVALUATION SÉVÉRITÉ =================
+/**
+ * Évalue la sévérité d'un cas médical à partir du résumé collecté.
+ * Tient compte des antécédents médicaux du patient.
+ *
+ * @param {Object} summary - Résumé ESO collecté
+ * @param {Object|null} userMedicalHistory - Antécédents du patient (diabete, asthme, tension, other)
+ * @returns {'critique'|'urgent'|'modere'|'faible'}
+ */
+function evaluateSeverity(summary, userMedicalHistory = null) {
+    const symptom = (summary.symptom || '').toLowerCase();
+    const bodyPart = (summary.bodyPart || '').toLowerCase();
+    const rawIntensity = summary.intensity;
+    const intensityNum = typeof rawIntensity === 'number' ?
+        rawIntensity :
+        parseInt(String(rawIntensity || '0'), 10);
+    const intensityStr = String(rawIntensity || '').toLowerCase();
 
-  console.log(`🔍 [SEVERITY] Symptôme: ${symptom}, BodyPart: ${bodyPart}, Intensity: ${intensity}`);
+    // ─────────────────────────────────────────────────────────────
+    // NIVEAU CRITIQUE — Danger de mort immédiat
+    // ─────────────────────────────────────────────────────────────
 
-  // ✅ Vérifier si le patient a des facteurs de risque (antécédents)
-  let hasRiskFactor = false;
-  let riskDetails = [];
-  
-  if (userMedicalHistory) {
-    if (userMedicalHistory.diabete) {
-      hasRiskFactor = true;
-      riskDetails.push('diabète');
+    // 1. Signes d'infarctus : douleur poitrine + irradiation bras/épaule/mâchoire
+    const isChestPain =
+        bodyPart.includes('poitrine') || bodyPart.includes('thorax') ||
+        symptom.includes('poitrine') || symptom.includes('thorax') ||
+        symptom.includes('cardiaque') || symptom.includes('infarctus');
+
+    const hasRadiation =
+        bodyPart.includes('bras') || bodyPart.includes('épaule') ||
+        bodyPart.includes('machoire') || bodyPart.includes('mâchoire') ||
+        bodyPart.includes('gauche');
+
+    if (isChestPain && hasRadiation) {
+        console.log('🔴 [SEVERITY] CRITIQUE — Signes d\'infarctus (poitrine + radiation)');
+        return 'critique';
     }
-    if (userMedicalHistory.asthme) {
-      hasRiskFactor = true;
-      riskDetails.push('asthme');
+
+    // 2. Inconscience / arrêt cardiaque / AVC
+    const isUnconscious =
+        symptom.includes('inconscient') || symptom.includes('inconscience') ||
+        symptom.includes('perte de connaissance') || symptom.includes('coma') ||
+        symptom.includes('ne répond plus') || symptom.includes('avc') ||
+        symptom.includes('paralysie');
+
+    if (isUnconscious) {
+        console.log('🔴 [SEVERITY] CRITIQUE — Inconscience / AVC');
+        return 'critique';
     }
-    if (userMedicalHistory.tension) {
-      hasRiskFactor = true;
-      riskDetails.push('hypertension');
+
+    // 3. Détresse respiratoire sévère
+    const isSevereRespiratory =
+        (symptom.includes('dyspnee') || symptom.includes('respir') || symptom.includes('souffle')) &&
+        (intensityNum >= 8 || intensityStr.includes('insupportable') ||
+            intensityStr.includes('très fort') || intensityStr.includes('ne peut pas'));
+
+    if (isSevereRespiratory) {
+        console.log('🔴 [SEVERITY] CRITIQUE — Détresse respiratoire sévère');
+        return 'critique';
     }
-    
-    if (hasRiskFactor) {
-      console.log(`⚠️ [SEVERITY] Patient à risque (${riskDetails.join(', ')}) → majoration de la sévérité`);
+
+    // 4. Hémorragie grave
+    const isSevereBleed =
+        symptom.includes('hemorragie') || symptom.includes('hémorragie') ||
+        (symptom.includes('saignement') &&
+            (intensityNum >= 8 || intensityStr.includes('abondant') || intensityStr.includes('important')));
+
+    if (isSevereBleed) {
+        console.log('🔴 [SEVERITY] CRITIQUE — Hémorragie grave');
+        return 'critique';
     }
-  }
 
-  // ✅ CAS CRITIQUES avec antécédents - Priorité absolue
-  // Asthme + problème respiratoire = CRITIQUE immédiat
-  if ((symptom.includes('dyspnee') || symptom.includes('respir') || bodyPart.includes('poumon')) && userMedicalHistory?.asthme) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Asthmatique + problème respiratoire`);
-    return 'critique';
-  }
-  
-  // Hypertension + douleur thoracique = CRITIQUE immédiat
-  if ((symptom.includes('cardiaque') || (symptom.includes('douleur') && bodyPart.includes('poitrine'))) && userMedicalHistory?.tension) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Hypertendu + douleur thoracique`);
-    return 'critique';
-  }
-  
-  // Diabète + fièvre = CRITIQUE (risque d'infection)
-  if ((symptom.includes('fievre') || symptom.includes('fièvre')) && userMedicalHistory?.diabete) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Diabétique + fièvre`);
-    return 'critique';
-  }
+    // ─────────────────────────────────────────────────────────────
+    // NIVEAU URGENT — Consultation dans les heures qui suivent
+    // ─────────────────────────────────────────────────────────────
 
-  // ✅ CAS CRITIQUES standards
-  if (symptom.includes('dyspnee') || symptom.includes('respir') || 
-      bodyPart.includes('poumon') || symptom.includes('souffle')) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Problème respiratoire`);
-    return 'critique';
-  }
-  
-  if (symptom.includes('cardiaque') || symptom.includes('coeur') || 
-      (symptom.includes('douleur') && bodyPart.includes('poitrine'))) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Problème cardiaque`);
-    return 'critique';
-  }
-  
-  if (symptom.includes('hemorragie') || symptom.includes('saignement')) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Hémorragie`);
-    return 'critique';
-  }
-  
-  if (symptom.includes('inconscience')) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Perte de conscience`);
-    return 'critique';
-  }
+    // 5. Douleur thoracique seule (sans radiation confirmée)
+    if (isChestPain) {
+        console.log('🟠 [SEVERITY] URGENT — Douleur thoracique');
+        return 'urgent';
+    }
 
-  // ✅ Cas critiques standards
-  if (symptom === 'cardiaque') return 'critique';
-  if (symptom === 'douleur' && bodyPart === 'poitrine') return 'critique';
-  if (symptom === 'dyspnee') return 'critique';
-  if (symptom === 'saignement') return 'critique';
-  
-  // ✅ Avec facteurs de risque, abaisser le seuil de criticité
-  if (hasRiskFactor && intensity >= 5) {
-    console.log(`⚠️ [SEVERITY] CRITIQUE - Patient à risque + intensité ${intensity}`);
-    return 'critique';
-  }
-  
-  // Combinaison intensité + durée
-  if (intensity >= 8) return 'critique';
-  if (intensity >= 5 && duration > 24) return 'critique';
-  if (intensity >= 5) return 'moyenne';
-  if (intensity >= 3) return 'faible';
-  if (summary.symptom) return 'faible';
-  
-  return 'inconnue';
-};
+    // 6. Intensité très élevée (≥ 8/10 ou "insupportable")
+    if (
+        intensityNum >= 8 ||
+        intensityStr.includes('insupportable') ||
+        intensityStr.includes('atroce') ||
+        intensityStr.includes('très fort') ||
+        intensityStr.includes('très forte')
+    ) {
+        console.log('🟠 [SEVERITY] URGENT — Intensité très élevée');
+        return 'urgent';
+    }
 
-// ================= FALLBACK =================
-const generateReply = (summary) => {
-  if (!summary.symptom) return "Quel est le problème principal ?";
-  if (!summary.bodyPart) return "Où avez-vous mal ?";
-  if (!summary.duration) return "Depuis combien de temps ?";
-  if (summary.intensity === undefined || summary.intensity === null)
-    return "Sur une échelle de 1 à 10, quelle est l'intensité ?";
-  if (!summary.age) return "Quel âge a le patient ?";
-  if (!summary.patientLocation) return "Où se trouve le patient ?";
-  return null;
-};
+    // 7. Antécédents aggravants + symptôme significatif
+    if (userMedicalHistory) {
+        const hasRisk =
+            userMedicalHistory.diabete ||
+            userMedicalHistory.tension ||
+            userMedicalHistory.asthme;
 
-const processMessage = (userMessage, currentSummary = {}) => {
-  const extractedInfo = extractInfo(userMessage, currentSummary);
-  const updatedSummary = { ...currentSummary, ...extractedInfo };
-  const reply = generateReply(updatedSummary);
-  
-  return {
-    reply: reply || "Merci. Toutes les informations sont enregistrées.",
-    intent: "rules_fallback",
-    extractedInfo: extractedInfo
-  };
-};
+        const hasSignificantSymptom =
+            symptom.includes('douleur') || symptom.includes('cardiaque') ||
+            symptom.includes('dyspnee') || symptom.includes('saignement') ||
+            isChestPain;
 
-// ================= EXPORTS =================
+        if (hasRisk && hasSignificantSymptom) {
+            console.log('🟠 [SEVERITY] URGENT — Antécédents + symptôme significatif');
+            return 'urgent';
+        }
+    }
+
+    // 8. Traumatisme grave (chute, accident, coup violent)
+    if (
+        symptom.includes('traumatisme') &&
+        (intensityNum >= 7 || intensityStr.includes('fort') || intensityStr.includes('grave'))
+    ) {
+        console.log('🟠 [SEVERITY] URGENT — Traumatisme grave');
+        return 'urgent';
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // NIVEAU MODÉRÉ — Consultation dans la journée
+    // ─────────────────────────────────────────────────────────────
+    if (
+        intensityNum >= 5 ||
+        symptom.includes('douleur') || symptom.includes('fievre') ||
+        symptom.includes('nausee') || symptom.includes('saignement')
+    ) {
+        console.log('🟡 [SEVERITY] MODÉRÉ');
+        return 'modere';
+    }
+
+    // ─────────────────────────────────────────────────────────────
+    // NIVEAU FAIBLE — Conseil médical
+    // ─────────────────────────────────────────────────────────────
+    console.log('🟢 [SEVERITY] FAIBLE');
+    return 'faible';
+}
+
+// ================= EXPORT =================
 module.exports = {
-  processMessage,
-  extractInfo,
-  evaluateSeverity,
-  normalizeText,
-  isCriticalEmergency
+    extractInfo,
+    evaluateSeverity,
+    isCriticalEmergency,
+    normalizeText,
+    SYMPTOM_KEYWORDS,
+    BODY_PARTS,
+    CRITICAL_KEYWORDS
 };

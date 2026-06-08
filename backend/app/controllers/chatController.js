@@ -1,11 +1,15 @@
 // backend/app/controllers/chatController.js
 const { processMessage } = require('../services/nlpService');
+const { evaluateSeverity } = require('../services/nlpService');
 const ESOBuilder = require('../utils/esoBuilder');
 const Conversation = require('../models/Conversation');
 const { processMessageGroq } = require('../services/processMessageGroq');
-const User = require('../models/User'); // ✅ AJOUT : Importer le modèle User
+const User = require('../models/User');
 
 console.log('✅ processMessageGroq importée');
+
+// ================= CHAMPS ESO REQUIS =================
+const REQUIRED_ESO_FIELDS = ['symptom', 'bodyPart', 'duration', 'age', 'patientLocation'];
 
 // Map des sessions actives en mémoire
 const sessions = new Map();
@@ -13,7 +17,6 @@ const sessions = new Map();
 // Nettoyage automatique des sessions inactives
 setInterval(() => {
     const now = Date.now();
-
     for (const [id, data] of sessions.entries()) {
         if (data.lastAccess && (now - data.lastAccess) > 3600000) {
             sessions.delete(id);
@@ -24,25 +27,43 @@ setInterval(() => {
 
 // ================= HELPER : HISTORIQUE =================
 function getFormattedHistory(sessionData, limit = 10) {
-
-    if (!sessionData ||
-        !sessionData.conversationHistory ||
-        !Array.isArray(sessionData.conversationHistory)
-    ) {
+    if (!sessionData || !sessionData.conversationHistory || !Array.isArray(sessionData.conversationHistory)) {
         return [];
     }
-
     return sessionData.conversationHistory.slice(-limit);
+}
+
+// ================= HELPER : MERGE SUMMARY DANS SESSION =================
+/**
+ * Fusionne le updatedSummary de processMessageGroq dans la session en mémoire.
+ * Ne jamais écraser un champ existant par null/undefined.
+ */
+function mergeSummaryIntoSession(sessionData, updatedSummary) {
+    if (!updatedSummary) return;
+
+    if (!sessionData.esoSummary) {
+        sessionData.esoSummary = {};
+    }
+
+    for (const [key, value] of Object.entries(updatedSummary)) {
+        // Ne pas copier les clés internes
+        if (key.startsWith('_')) continue;
+
+        if (value !== null && value !== undefined && value !== '') {
+            sessionData.esoSummary[key] = value;
+        }
+        // Si null → conserver la valeur existante (ne rien faire)
+    }
+
+    console.log(`📊 [SESSION MERGE] ESO en mémoire:`, JSON.stringify(sessionData.esoSummary));
 }
 
 // ================= HANDLE CHAT =================
 const handleChat = async(req, res) => {
-
     try {
-
         const { message, sessionId, resetSession } = req.body;
 
-        // ✅ Récupérer l'userId du token et les antécédents
+        // ── Récupération utilisateur ───────────────────────────────────────────
         let userId = null;
         let userMedicalHistory = null;
         let userAge = null;
@@ -54,7 +75,6 @@ const handleChat = async(req, res) => {
             userId = req.user.id;
         }
 
-        // ✅ Récupérer les antécédents médicaux de l'utilisateur
         if (userId) {
             try {
                 const user = await User.findById(userId).select('medicalHistory age gender');
@@ -62,8 +82,10 @@ const handleChat = async(req, res) => {
                     userMedicalHistory = user.medicalHistory;
                     userAge = user.age;
                     userGender = user.gender;
+                    // userAge sert uniquement à l'évaluation médicale (gravité, antécédents)
+                    // Il ne doit JAMAIS être injecté dans esoSummary.age
                     console.log(`🏥 Antécédents du patient:`, userMedicalHistory);
-                    console.log(`👤 Âge: ${userAge}, Sexe: ${userGender}`);
+                    console.log(`👤 Âge profil (contexte médical uniquement): ${userAge}, Sexe: ${userGender}`);
                 }
             } catch (err) {
                 console.error('❌ Erreur récupération antécédents:', err.message);
@@ -71,38 +93,27 @@ const handleChat = async(req, res) => {
         }
 
         console.log(`👤 Utilisateur connecté: ${userId || 'anonyme'}`);
-        console.log(`📨 Message reçu: "${message?.substring(0, 50)}..."`);
+        console.log(`📨 Message reçu: "${message ? message.substring(0, 50) : ''}..."`);
 
-        if (!message ||
-            typeof message !== 'string' ||
-            message.trim() === ''
-        ) {
-            return res.status(400).json({
-                error: 'Message invalide'
-            });
+        if (!message || typeof message !== 'string' || message.trim() === '') {
+            return res.status(400).json({ error: 'Message invalide' });
         }
 
+        // ── Gestion session ────────────────────────────────────────────────────
         let id = sessionId;
         let isNewSession = false;
 
-        // Reset session
         if (resetSession === true) {
-
             if (id && sessions.has(id)) {
                 sessions.delete(id);
                 console.log(`🗑️ Ancienne session ${id} supprimée`);
             }
-
             id = Date.now().toString();
             isNewSession = true;
-
             console.log('🆕 Nouvelle session reset:', id);
-
         } else if (!id) {
-
             id = Date.now().toString();
             isNewSession = true;
-
             console.log('🆕 Nouvelle session:', id);
         }
 
@@ -110,170 +121,112 @@ const handleChat = async(req, res) => {
 
         let sessionData = sessions.get(id);
 
-        // Initialiser session
         if (!sessionData || isNewSession) {
-
             sessions.set(id, {
                 builder: new ESOBuilder(),
+                esoSummary: {}, // ← ESO complet géré ici (source de vérité)
                 lastAccess: Date.now(),
                 createdAt: new Date(),
                 conversationHistory: []
             });
-
             sessionData = sessions.get(id);
-
             console.log('📋 Session initialisée');
-
         } else {
-
             sessionData.lastAccess = Date.now();
-
-            let historyLength = 0;
-
-            if (
-                sessionData.conversationHistory &&
-                Array.isArray(sessionData.conversationHistory)
-            ) {
-                historyLength = sessionData.conversationHistory.length;
-            }
-
-            console.log(
-                `📋 Session existante — ${historyLength} messages`
-            );
+            const historyLength = sessionData.conversationHistory && sessionData.conversationHistory.length || 0;
+            console.log(`📋 Session existante — ${historyLength} messages`);
         }
 
-        const builder = sessionData.builder;
+        // ─────────────────────────────────────────────────────────────────────
+        // SOURCE DE VÉRITÉ : sessionData.esoSummary
+        //
+        // ⚠️ CORRECTION : On ne pré-remplit JAMAIS esoSummary.age depuis userAge.
+        // userAge (profil utilisateur connecté) sert uniquement à contextualiser
+        // l'évaluation de gravité médicale dans processMessageGroq et evaluateSeverity.
+        // L'âge du PATIENT doit être collecté explicitement dans la conversation.
+        // ─────────────────────────────────────────────────────────────────────
+        if (!sessionData.esoSummary) sessionData.esoSummary = {};
 
-        console.log(
-            '📋 [AVANT] ESO:',
-            JSON.stringify(builder.getSummary())
-        );
+        const currentSummary = {...sessionData.esoSummary };
+        console.log('📋 [AVANT] ESO (source de vérité):', JSON.stringify(currentSummary));
 
-        const conversationHistory =
-            getFormattedHistory(sessionData, 10);
-
-        const useGroq =
-            process.env.USE_GROQ === 'true' &&
-            processMessageGroq !== null;
-
+        const conversationHistory = getFormattedHistory(sessionData, 10);
+        const useGroq = process.env.USE_GROQ === 'true' && processMessageGroq !== null;
         console.log('🔍 USE_GROQ =', useGroq);
 
+        // ── Appel au moteur ────────────────────────────────────────────────────
         let result;
 
         if (useGroq) {
-
-            // ✅ MODIFICATION : Passer les antécédents à processMessageGroq
             result = await processMessageGroq(
                 message,
-                builder.getSummary(),
+                currentSummary, // ← source de vérité — sans age injecté depuis le profil
                 id,
                 conversationHistory,
-                userMedicalHistory,  // ✅ AJOUT : Antécédents
-                userAge,             // ✅ AJOUT : Âge
-                userGender           // ✅ AJOUT : Sexe
+                userMedicalHistory,
+                userAge, // ← passé séparément pour évaluation médicale uniquement
+                userGender
             );
-
         } else {
-
-            result = processMessage(
-                message,
-                builder.getSummary()
-            );
+            result = processMessage(message, currentSummary);
         }
 
-        const {
-            reply,
-            extractedInfo,
-            intent,
-            confidence,
-            updatedSummary
-        } = result;
+        const { reply, extractedInfo, intent, confidence, updatedSummary, severity: resultSeverity } = result;
 
-        // Mise à jour ESO
-        const infoToMerge =
-            updatedSummary || extractedInfo;
+        // ─────────────────────────────────────────────────────────────────────
+        // MERGE : updatedSummary → sessionData.esoSummary (source de vérité)
+        // ─────────────────────────────────────────────────────────────────────
+        const infoToMerge = updatedSummary || extractedInfo;
+        mergeSummaryIntoSession(sessionData, infoToMerge);
 
-        if (
-            infoToMerge &&
-            Object.keys(infoToMerge).length > 0
-        ) {
+        // ─────────────────────────────────────────────────────────────────────
+        // SEVERITY : utiliser celle retournée par processMessageGroq,
+        // ou recalculer depuis la source de vérité si absente.
+        // ─────────────────────────────────────────────────────────────────────
+        let finalSeverity = resultSeverity;
 
-            const cleanInfo = {};
-
-            for (const key in infoToMerge) {
-
-                const value = infoToMerge[key];
-
-                if (
-                    value !== null &&
-                    value !== undefined &&
-                    value !== '' &&
-                    !String(value).startsWith('_')
-                ) {
-                    cleanInfo[key] = value;
-                }
-            }
-
-            if (Object.keys(cleanInfo).length > 0) {
-                builder.update(cleanInfo);
-            }
+        if (!finalSeverity || finalSeverity === 'faible') {
+            finalSeverity = evaluateSeverity(sessionData.esoSummary, userMedicalHistory);
+            console.log(`🔄 [SEVERITY] Recalculé: ${finalSeverity}`);
+        } else {
+            console.log(`✅ [SEVERITY] Depuis processMessageGroq: ${finalSeverity}`);
         }
 
-        const summary = builder.getSummary();
+        // Injecter la severity correcte dans le résumé final
+        sessionData.esoSummary.severity = finalSeverity;
 
-        console.log(
-            '📋 [APRÈS] ESO:',
-            JSON.stringify(summary)
-        );
+        const summary = {...sessionData.esoSummary };
 
-        // Historique mémoire
-        sessionData.conversationHistory.push({
-            role: 'user',
-            content: message
-        }, {
-            role: 'assistant',
-            content: reply
-        });
+        // Vérifier champs manquants pour log
+        const missingFields = REQUIRED_ESO_FIELDS.filter(f => !summary[f]);
+        console.log('📋 [APRÈS] ESO:', JSON.stringify(summary));
+        console.log(`📋 [MANQUANTS] ${missingFields.length > 0 ? missingFields.join(', ') : 'Aucun ✅'}`);
 
-        // Limite historique
+        // ── Historique conversation ────────────────────────────────────────────
+        sessionData.conversationHistory.push({ role: 'user', content: message }, { role: 'assistant', content: reply });
+
         if (sessionData.conversationHistory.length > 30) {
-            sessionData.conversationHistory =
-                sessionData.conversationHistory.slice(-30);
+            sessionData.conversationHistory = sessionData.conversationHistory.slice(-30);
         }
 
-        // ================= MONGODB (CORRIGÉ) =================
+        // ── Sauvegarde MongoDB ─────────────────────────────────────────────────
         try {
-
             let title = 'Consultation médicale';
 
             if (summary.symptom) {
-
-                title =
-                    `${summary.symptom} ${summary.bodyPart || ''}`.trim();
-
-                if (title.length > 50) {
-                    title = title.substring(0, 50);
-                }
-
+                title = `${summary.symptom} ${summary.bodyPart || ''}`.trim();
+                if (title.length > 50) title = title.substring(0, 50);
             } else if (message.length > 0) {
-
                 title = message.substring(0, 50);
             }
 
-            // ✅ Vérifier si la conversation existe déjà
             let existingConversation = await Conversation.findOne({ sessionId: id });
-            
-            // ✅ CRUCIAL : Si l'utilisateur est connecté, FORCER l'association
-            if (userId) {
-                // Si la conversation existe déjà sans userId, la mettre à jour
-                if (existingConversation && !existingConversation.userId) {
-                    console.log(`🔄 FORCAGE: Association de la conversation ${id} à l'utilisateur ${userId}`);
-                    await Conversation.updateOne(
-                        { sessionId: id },
-                        { $set: { userId: userId, tempUserId: null } }
-                    );
-                    existingConversation = await Conversation.findOne({ sessionId: id });
-                }
+
+            // Forcer l'association userId si la conversation existait anonyme
+            if (userId && existingConversation && !existingConversation.userId) {
+                console.log(`🔄 FORCAGE: Association de la conversation ${id} à l'utilisateur ${userId}`);
+                await Conversation.updateOne({ sessionId: id }, { $set: { userId: userId, tempUserId: null } });
+                existingConversation = await Conversation.findOne({ sessionId: id });
             }
 
             const updateData = {
@@ -285,22 +238,14 @@ const handleChat = async(req, res) => {
                 },
                 $push: {
                     messages: {
-                        $each: [{
-                                sender: 'user',
-                                text: message,
-                                timestamp: new Date()
-                            },
-                            {
-                                sender: 'bot',
-                                text: reply,
-                                timestamp: new Date()
-                            }
+                        $each: [
+                            { sender: 'user', text: message, timestamp: new Date() },
+                            { sender: 'bot', text: reply, timestamp: new Date() }
                         ]
                     }
                 }
             };
 
-            // ✅ FORCER userId si l'utilisateur est connecté
             if (userId) {
                 updateData.$set.userId = userId;
                 updateData.$unset = { tempUserId: "" };
@@ -314,342 +259,170 @@ const handleChat = async(req, res) => {
                 updateData.$set.createdAt = new Date();
             }
 
-            const result = await Conversation.findOneAndUpdate(
-                { sessionId: id },
-                updateData,
-                { upsert: true, new: true }
+            const dbResult = await Conversation.findOneAndUpdate({ sessionId: id },
+                updateData, { upsert: true, new: true }
             );
 
-            console.log(`✅ Sauvegarde MongoDB réussie - userId final: ${result.userId || 'anonyme'}`);
+            console.log(`✅ Sauvegarde MongoDB réussie - userId final: ${dbResult.userId || 'anonyme'}`);
             console.log(`📊 ESO Summary sauvegardé:`, summary);
 
         } catch (dbError) {
-
-            console.error(
-                '❌ Erreur MongoDB:',
-                dbError.message
-            );
+            console.error('❌ Erreur MongoDB:', dbError.message);
         }
 
+        // ── Réponse au frontend ────────────────────────────────────────────────
         res.json({
             reply,
             esoSummary: summary,
             sessionId: id,
             intent,
+            severity: finalSeverity,
+            missingFields,
             confidence: confidence || 0,
             isNewSession
         });
 
     } catch (error) {
-
-        console.error(
-            '❌ Erreur générale dans handleChat:',
-            error
-        );
-
-        res.status(500).json({
-            error: 'Erreur interne du serveur'
-        });
+        console.error('❌ Erreur générale dans handleChat:', error);
+        res.status(500).json({ error: 'Erreur interne du serveur' });
     }
 };
 
 // ================= RESET SESSION =================
 const resetChatSession = async(req, res) => {
-
     try {
-
         const { sessionId } = req.body;
 
         if (sessionId && sessions.has(sessionId)) {
-
             sessions.delete(sessionId);
-
-            console.log(
-                `🗑️ Session ${sessionId} supprimée`
-            );
+            console.log(`🗑️ Session ${sessionId} supprimée`);
         }
 
         try {
-
             if (sessionId) {
-
-                await Conversation.findOneAndUpdate({ sessionId }, {
-                    $set: {
-                        resetAt: new Date(),
-                        isActive: false,
-                        esoSummary: {}
-                    }
-                });
+                await Conversation.findOneAndUpdate({ sessionId }, { $set: { resetAt: new Date(), isActive: false, esoSummary: {} } });
             }
-
         } catch (dbError) {
-
-            console.log(
-                'Note: Base non mise à jour pour reset'
-            );
+            console.log('Note: Base non mise à jour pour reset');
         }
 
         const newSessionId = Date.now().toString();
-
-        res.json({
-            success: true,
-            message: 'Session réinitialisée',
-            newSessionId
-        });
+        res.json({ success: true, message: 'Session réinitialisée', newSessionId });
 
     } catch (error) {
-
-        console.error(
-            '❌ Erreur reset:',
-            error
-        );
-
-        res.status(500).json({
-            error: 'Erreur reset'
-        });
+        console.error('❌ Erreur reset:', error);
+        res.status(500).json({ error: 'Erreur reset' });
     }
 };
 
 // ================= CLEANUP =================
 const cleanupSessions = async(req, res) => {
-
     try {
-
         const now = Date.now();
-
         let count = 0;
 
         for (const [id, data] of sessions.entries()) {
-
-            if (
-                data.lastAccess &&
-                (now - data.lastAccess) > 3600000
-            ) {
+            if (data.lastAccess && (now - data.lastAccess) > 3600000) {
                 sessions.delete(id);
                 count++;
             }
         }
 
-        res.json({
-            success: true,
-            sessionsDeleted: count,
-            remainingSessions: sessions.size
-        });
+        res.json({ success: true, sessionsDeleted: count, remainingSessions: sessions.size });
 
     } catch (error) {
-
-        console.error(
-            '❌ Erreur nettoyage:',
-            error
-        );
-
-        res.status(500).json({
-            error: 'Erreur nettoyage'
-        });
+        console.error('❌ Erreur nettoyage:', error);
+        res.status(500).json({ error: 'Erreur nettoyage' });
     }
 };
 
 // ================= USER HISTORY =================
 const getUserHistory = async(req, res) => {
-
     try {
-
-        const userId =
-            req.user.userId || req.user.id;
-
+        const userId = req.user.userId || req.user.id;
         console.log(`🔍 Récupération historique pour user: ${userId}`);
 
-        const conversations =
-            await Conversation.find({ userId })
-            .sort({ updatedAt: -1 });
-
-        console.log(
-            `📊 ${conversations.length} conversations trouvées`
-        );
+        const conversations = await Conversation.find({ userId }).sort({ updatedAt: -1 });
+        console.log(`📊 ${conversations.length} conversations trouvées`);
 
         const formatted = conversations.map(conv => {
-
             let firstUserMsg = null;
             let lastBotMsg = null;
 
-            if (
-                conv.messages &&
-                Array.isArray(conv.messages)
-            ) {
-
-                firstUserMsg =
-                    conv.messages.find(
-                        m => m.sender === 'user'
-                    );
-
-                const botMessages =
-                    conv.messages.filter(
-                        m => m.sender === 'bot'
-                    );
-
-                if (botMessages.length > 0) {
-                    lastBotMsg =
-                        botMessages[botMessages.length - 1];
-                }
+            if (conv.messages && Array.isArray(conv.messages)) {
+                firstUserMsg = conv.messages.find(m => m.sender === 'user');
+                const botMessages = conv.messages.filter(m => m.sender === 'bot');
+                if (botMessages.length > 0) lastBotMsg = botMessages[botMessages.length - 1];
             }
 
             let title = 'Consultation médicale';
-
-            if (
-                conv.title &&
-                conv.title !== 'Consultation médicale'
-            ) {
-
+            if (conv.title && conv.title !== 'Consultation médicale') {
                 title = conv.title;
-
-            } else if (
-                firstUserMsg &&
-                firstUserMsg.text
-            ) {
-
-                title =
-                    firstUserMsg.text.substring(0, 50);
+            } else if (firstUserMsg && firstUserMsg.text) {
+                title = firstUserMsg.text.substring(0, 50);
             }
 
             return {
                 id: conv._id,
-
                 sessionId: conv.sessionId,
-
                 date: conv.updatedAt ?
-                    new Date(conv.updatedAt)
-                    .toLocaleString('fr-FR') : new Date()
-                    .toLocaleString('fr-FR'),
-
-                title: title,
-
-                preview: lastBotMsg &&
-                    lastBotMsg.text ?
+                    new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
+                title,
+                preview: lastBotMsg && lastBotMsg.text ?
                     lastBotMsg.text.substring(0, 120) : 'En attente de réponse...',
-
-                messageCount: conv.messages &&
-                    Array.isArray(conv.messages) ?
-                    conv.messages.length : 0,
-
-                urgency: lastBotMsg &&
-                    lastBotMsg.text &&
-                    lastBotMsg.text.includes('URGENCE')
+                messageCount: conv.messages && Array.isArray(conv.messages) ? conv.messages.length : 0,
+                urgency: lastBotMsg && lastBotMsg.text && lastBotMsg.text.includes('URGENCE')
             };
         });
 
         res.json(formatted);
 
     } catch (error) {
-
-        console.error(
-            'Erreur récupération historique:',
-            error
-        );
-
-        res.status(500).json({
-            error: 'Erreur récupération'
-        });
+        console.error('Erreur récupération historique:', error);
+        res.status(500).json({ error: 'Erreur récupération' });
     }
 };
 
 // ================= PUBLIC HISTORY =================
 const getPublicHistory = async(req, res) => {
-
     try {
+        const sessionId = req.headers['x-session-id'];
+        if (!sessionId) return res.json([]);
 
-        const sessionId =
-            req.headers['x-session-id'];
-
-        if (!sessionId) {
-            return res.json([]);
-        }
-
-        const conversations =
-            await Conversation.find({
-                $or: [
-                    { sessionId },
-                    { tempUserId: sessionId }
-                ]
-            }).sort({ updatedAt: -1 });
+        const conversations = await Conversation.find({
+            $or: [{ sessionId }, { tempUserId: sessionId }]
+        }).sort({ updatedAt: -1 });
 
         const formatted = conversations.map(conv => {
-
             let firstUserMsg = null;
             let lastBotMsg = null;
 
-            if (
-                conv.messages &&
-                Array.isArray(conv.messages)
-            ) {
-
-                firstUserMsg =
-                    conv.messages.find(
-                        m => m.sender === 'user'
-                    );
-
-                const botMessages =
-                    conv.messages.filter(
-                        m => m.sender === 'bot'
-                    );
-
-                if (botMessages.length > 0) {
-                    lastBotMsg =
-                        botMessages[botMessages.length - 1];
-                }
+            if (conv.messages && Array.isArray(conv.messages)) {
+                firstUserMsg = conv.messages.find(m => m.sender === 'user');
+                const botMessages = conv.messages.filter(m => m.sender === 'bot');
+                if (botMessages.length > 0) lastBotMsg = botMessages[botMessages.length - 1];
             }
 
-            let title = 'Consultation médicale';
-
-            if (conv.title) {
-
-                title = conv.title;
-
-            } else if (
-                firstUserMsg &&
-                firstUserMsg.text
-            ) {
-
-                title =
-                    firstUserMsg.text.substring(0, 50);
+            let title = conv.title || 'Consultation médicale';
+            if (!conv.title && firstUserMsg && firstUserMsg.text) {
+                title = firstUserMsg.text.substring(0, 50);
             }
 
             let preview = 'Aucun message';
-
-            if (
-                lastBotMsg &&
-                lastBotMsg.text
-            ) {
-
-                preview =
-                    lastBotMsg.text.substring(0, 120);
-
-            } else if (
-                firstUserMsg &&
-                firstUserMsg.text
-            ) {
-
-                preview =
-                    firstUserMsg.text.substring(0, 120);
+            if (lastBotMsg && lastBotMsg.text) {
+                preview = lastBotMsg.text.substring(0, 120);
+            } else if (firstUserMsg && firstUserMsg.text) {
+                preview = firstUserMsg.text.substring(0, 120);
             }
 
             return {
                 id: conv._id,
-
                 sessionId: conv.sessionId,
-
                 date: conv.updatedAt ?
-                    new Date(conv.updatedAt)
-                    .toLocaleString('fr-FR') : new Date()
-                    .toLocaleString('fr-FR'),
-
-                title: title,
-
-                preview: preview,
-
-                messageCount: conv.messages &&
-                    Array.isArray(conv.messages) ?
-                    conv.messages.length : 0,
-
+                    new Date(conv.updatedAt).toLocaleString('fr-FR') : new Date().toLocaleString('fr-FR'),
+                title,
+                preview,
+                messageCount: conv.messages && Array.isArray(conv.messages) ? conv.messages.length : 0,
                 urgency: false
             };
         });
@@ -657,58 +430,28 @@ const getPublicHistory = async(req, res) => {
         res.json(formatted);
 
     } catch (error) {
-
-        console.error(
-            'Erreur historique public:',
-            error
-        );
-
-        res.status(500).json({
-            error: 'Erreur récupération'
-        });
+        console.error('Erreur historique public:', error);
+        res.status(500).json({ error: 'Erreur récupération' });
     }
 };
 
 // ================= SESSION STATE =================
 const getSessionState = async(req, res) => {
-
     try {
-
         const { sessionId } = req.params;
+        const sessionData = sessions.get(sessionId);
 
-        const sessionData =
-            sessions.get(sessionId);
-
-        if (!sessionData) {
-
-            return res.json({
-                exists: false
-            });
-        }
-
-        let historyLength = 0;
-
-        if (
-            sessionData.conversationHistory &&
-            Array.isArray(sessionData.conversationHistory)
-        ) {
-            historyLength =
-                sessionData.conversationHistory.length;
-        }
+        if (!sessionData) return res.json({ exists: false });
 
         res.json({
             exists: true,
-            summary: sessionData.builder.getSummary(),
-            historyLength: historyLength,
-            lastAccess: new Date(sessionData.lastAccess)
-                .toISOString()
+            summary: sessionData.esoSummary || {},
+            historyLength: sessionData.conversationHistory && sessionData.conversationHistory.length || 0,
+            lastAccess: new Date(sessionData.lastAccess).toISOString()
         });
 
     } catch (error) {
-
-        res.status(500).json({
-            error: 'Erreur'
-        });
+        res.status(500).json({ error: 'Erreur' });
     }
 };
 
