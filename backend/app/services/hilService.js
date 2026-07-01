@@ -1,9 +1,9 @@
-// backend/app/services/hilService.js
 const axios = require('axios');
 require('dotenv').config();
 
 const D7_API_KEY = process.env.D7_API_KEY;
 const EMERGENCY_PHONE = process.env.EMERGENCY_PHONE || "+212602641467";
+const CONFIDENCE_THRESHOLD = parseFloat(process.env.CONFIDENCE_THRESHOLD || '0.6');
 
 /**
  * Envoie une alerte à un agent humain (SMS)
@@ -48,10 +48,19 @@ Niveau: ${summary.severity || 'Inconnu'}
                 'Content-Type': 'application/json'
             }
         });
+
         console.log("✅ [HIL] Alerte humaine envoyée par SMS");
         return true;
     } catch (error) {
-        console.error("❌ [HIL] Échec envoi SMS:", error.response?.data || error.message);
+        let errorDetails;
+
+        if (error && error.response && error.response.data) {
+            errorDetails = error.response.data;
+        } else {
+            errorDetails = error.message;
+        }
+
+        console.error("❌ [HIL] Échec envoi SMS:", errorDetails);
         return false;
     }
 }
@@ -63,8 +72,11 @@ Niveau: ${summary.severity || 'Inconnu'}
  * @returns {boolean}
  */
 function isHumanEscalationNeeded(confidence, isCritical = false) {
-    const THRESHOLD = process.env.CONFIDENCE_THRESHOLD || 0.6;
-    return confidence < THRESHOLD || isCritical;
+    if (isCritical && confidence < CONFIDENCE_THRESHOLD) {
+        return true;
+    } else {
+        return false;
+    }
 }
 
 module.exports = { sendHumanAlert, isHumanEscalationNeeded };
